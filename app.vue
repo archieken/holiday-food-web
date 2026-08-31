@@ -3,6 +3,7 @@
     <nav class="top-nav">
       <NuxtLink to="/" class="nav-link">Plan Trip</NuxtLink>
       <NuxtLink to="/recipes" class="nav-link">Explore Recipes</NuxtLink>
+      <NuxtLink to="/import-recipe" class="nav-link">Import Recipe</NuxtLink>
     </nav>
     <NuxtPage />
   </div>

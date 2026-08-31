@@ -83,3 +83,11 @@ export interface AddRecipeRequest extends ItineraryRequest {
   course: 'STARTER' | 'MAIN' | 'DESSERT' | null
   recipeId: string
 }
+
+export interface RecipeImportRequest {
+  /** A recipe name or a URL to a recipe page. */
+  input: string
+}
+
+/** A recipe extracted by the AI, not yet saved - it has no id until it's reviewed and saved. */
+export type RecipeDraft = Omit<Recipe, 'id'> & { id: string | null }
