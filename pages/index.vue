@@ -21,6 +21,7 @@ const {
   openShoppingList,
   refreshRecipe,
   removeRecipe,
+  changeServings,
   addExtraRecipe,
   removeExtraRecipe,
   assignExtraToDay
@@ -144,7 +145,18 @@ function setSlotForExtra(recipe: Recipe, slot: MealSlot) {
             <p class="meal-meta">
               <template v-if="placeLabel(entry.recipe)">{{ placeLabel(entry.recipe) }} &middot; </template>
               <template v-if="entry.recipe.difficulty">{{ capitalize(entry.recipe.difficulty) }} &middot; </template>
-              Prep {{ entry.recipe.prepTime }}m / Cook {{ entry.recipe.cookTime }}m &middot; Serves {{ entry.recipe.servings }}
+              Prep {{ entry.recipe.prepTime }}m / Cook {{ entry.recipe.cookTime }}m &middot;
+              Serves
+              <select
+                class="meal-servings-select"
+                :value="entry.recipe.servings"
+                :disabled="refreshingSlot === slotKey(day.day, entry.slot)"
+                @change="changeServings(day.day, entry, Number(($event.target as HTMLSelectElement).value))"
+              >
+                <option :value="2">2</option>
+                <option :value="4">4</option>
+                <option :value="6">6</option>
+              </select>
             </p>
             <p v-if="entry.recipe.localContext" class="meal-context">{{ entry.recipe.localContext }}</p>
             <ul>
@@ -456,6 +468,19 @@ button[type='submit']:disabled {
   font-size: 0.78rem;
   color: var(--muted);
   margin: 0 0 4px;
+}
+
+.meal-servings-select {
+  padding: 1px 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  background: var(--surface);
+}
+
+.meal-servings-select:disabled {
+  opacity: 0.6;
 }
 
 .meal-context {

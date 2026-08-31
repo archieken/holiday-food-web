@@ -194,6 +194,27 @@ export function useItineraryPlanner() {
     }
   }
 
+  /** Re-scales a single (day, slot) meal to a new servings count, keeping the same recipe. */
+  async function changeServings(dayNumber: number, entry: MealEntry, servings: number) {
+    const key = slotKey(dayNumber, entry.slot)
+    refreshingSlot.value = key
+    errorMessage.value = ''
+
+    const selection = daySelections.value[dayNumber - 1]
+    if (selection) setSelectionValue(selection, entry.slot, servings)
+
+    try {
+      itinerary.value = await $fetch<ItineraryResponse>('/api/itinerary', {
+        method: 'POST',
+        body: { country: COUNTRY, days: daySelections.value, extraRecipes: extraRecipes.value }
+      })
+    } catch (error: any) {
+      errorMessage.value = error.data?.message ?? error.statusMessage ?? 'Something went wrong updating servings.'
+    } finally {
+      refreshingSlot.value = null
+    }
+  }
+
   /** Which selection field on a MealSelection a given slot corresponds to. */
   function selectionValue(selection: MealSelection, slot: MealSlot): number | null {
     if (slot === 'BREAKFAST') return selection.breakfast
@@ -312,6 +333,7 @@ export function useItineraryPlanner() {
     openShoppingList,
     refreshRecipe,
     removeRecipe,
+    changeServings,
     addExtraRecipe,
     removeExtraRecipe,
     assignExtraToDay
