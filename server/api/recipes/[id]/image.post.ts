@@ -1,16 +1,19 @@
-import type { RecipeImportRequest, RecipeImportResult } from '~~/shared/types/itinerary'
-
 export default defineEventHandler(async (event) => {
   const { apiBase } = useRuntimeConfig()
-  const body = await readBody<RecipeImportRequest>(event)
+  const id = getRouterParam(event, 'id')
   const authorization = getHeader(event, 'authorization')
+  const contentType = getHeader(event, 'content-type')
+  const body = await readRawBody(event, false)
 
   try {
-    return await $fetch<RecipeImportResult>('/api/recipes/import', {
+    await $fetch(`/api/recipes/${id}/image`, {
       baseURL: apiBase,
       method: 'POST',
       body,
-      headers: authorization ? { Authorization: authorization } : {}
+      headers: {
+        ...(contentType ? { 'content-type': contentType } : {}),
+        ...(authorization ? { Authorization: authorization } : {})
+      }
     })
   } catch (error: any) {
     throw createError({
@@ -18,4 +21,7 @@ export default defineEventHandler(async (event) => {
       statusMessage: error.data?.message ?? 'Failed to reach holiday-food-api'
     })
   }
+
+  setResponseStatus(event, 204)
+  return null
 })

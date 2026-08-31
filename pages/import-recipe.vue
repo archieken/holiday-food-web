@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { RecipeDraft } from '~~/shared/types/itinerary'
+import type { RecipeDraft, RecipeImportResult } from '~~/shared/types/itinerary'
 
 useHead({ title: 'Import Recipe - Tavira Recipe Maker' })
 
@@ -12,6 +12,15 @@ const saving = ref(false)
 const errorMessage = ref('')
 const savedRecipeName = ref('')
 
+// The photo shown in the review step, either auto-fetched from the source page during
+// import or picked by the user - `imageFile` always wins over `fetchedImageUrl` when set.
+const fetchedImageUrl = ref<string | null>(null)
+const imageFile = ref<File | null>(null)
+const imagePreviewUrl = computed(() => {
+  if (imageFile.value) return URL.createObjectURL(imageFile.value)
+  return fetchedImageUrl.value
+})
+
 async function fetchDraft() {
   if (!input.value.trim()) return
 
@@ -20,11 +29,14 @@ async function fetchDraft() {
   savedRecipeName.value = ''
 
   try {
-    draft.value = await $fetch<RecipeDraft>('/api/recipes/import', {
+    const result = await $fetch<RecipeImportResult>('/api/recipes/import', {
       method: 'POST',
       body: { input: input.value.trim() },
       headers: authHeaders()
     })
+    draft.value = result.recipe
+    fetchedImageUrl.value = result.imageDataUrl
+    imageFile.value = null
   } catch (error: any) {
     errorMessage.value = error.data?.message ?? error.statusMessage ?? 'Something went wrong fetching that recipe.'
   } finally {
@@ -32,10 +44,22 @@ async function fetchDraft() {
   }
 }
 
+function onImagePicked(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  if (file) imageFile.value = file
+}
+
+function removeImage() {
+  imageFile.value = null
+  fetchedImageUrl.value = null
+}
+
 function startOver() {
   draft.value = null
   input.value = ''
   errorMessage.value = ''
+  fetchedImageUrl.value = null
+  imageFile.value = null
 }
 
 function addIngredient() {
@@ -69,14 +93,38 @@ async function saveRecipe() {
 
   try {
     const saved = await $fetch<RecipeDraft>('/api/recipes', { method: 'POST', body: payload, headers: authHeaders() })
+    await uploadImage(saved.id!)
     savedRecipeName.value = saved.name
     draft.value = null
     input.value = ''
+    fetchedImageUrl.value = null
+    imageFile.value = null
   } catch (error: any) {
     errorMessage.value = error.data?.message ?? error.statusMessage ?? 'Something went wrong saving that recipe.'
   } finally {
     saving.value = false
   }
+}
+
+// Best-effort: the recipe is already saved by this point, so a photo upload failure
+// shouldn't be reported as the save itself failing.
+async function uploadImage(recipeId: string) {
+  const file = imageFile.value ?? (fetchedImageUrl.value ? await dataUrlToFile(fetchedImageUrl.value) : null)
+  if (!file) return
+
+  const formData = new FormData()
+  formData.append('file', file)
+  try {
+    await $fetch(`/api/recipes/${recipeId}/image`, { method: 'POST', body: formData, headers: authHeaders() })
+  } catch {
+    // Photo upload is optional - the recipe itself saved fine.
+  }
+}
+
+async function dataUrlToFile(dataUrl: string): Promise<File> {
+  const blob = await (await fetch(dataUrl)).blob()
+  const extension = blob.type === 'image/png' ? 'png' : 'jpg'
+  return new File([blob], `photo.${extension}`, { type: blob.type })
 }
 </script>
 
@@ -116,6 +164,18 @@ async function saveRecipe() {
         <button type="button" class="discard-button" @click="startOver">Discard</button>
       </div>
       <p class="review-hint">Check every field, especially quantities and instructions, before saving - nothing is added to the catalogue until you save.</p>
+
+      <div class="photo-section">
+        <img v-if="imagePreviewUrl" :src="imagePreviewUrl" alt="" class="photo-preview">
+        <div v-else class="photo-placeholder">No photo yet</div>
+        <div class="photo-actions">
+          <label class="photo-pick-button">
+            {{ imagePreviewUrl ? 'Replace photo' : 'Add a photo' }}
+            <input type="file" accept="image/jpeg,image/png" class="photo-input" @change="onImagePicked">
+          </label>
+          <button v-if="imagePreviewUrl" type="button" class="remove-row-button" @click="removeImage">Remove</button>
+        </div>
+      </div>
 
       <div class="field-grid">
         <label class="field">
@@ -341,6 +401,64 @@ async function saveRecipe() {
   font-style: italic;
   color: var(--muted);
   margin: 8px 0 20px;
+}
+
+.photo-section {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.photo-preview {
+  width: 120px;
+  height: 90px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.photo-placeholder {
+  width: 120px;
+  height: 90px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.photo-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.photo-pick-button {
+  position: relative;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--portugal-green);
+  cursor: pointer;
+}
+
+.photo-pick-button:hover {
+  background: var(--bg);
+}
+
+.photo-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .field-grid {

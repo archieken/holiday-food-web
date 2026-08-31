@@ -106,3 +106,9 @@ export interface RecipeImportRequest {
 
 /** A recipe extracted by the AI, not yet saved - it has no id until it's reviewed and saved. */
 export type RecipeDraft = Omit<Recipe, 'id'> & { id: string | null }
+
+export interface RecipeImportResult {
+  recipe: RecipeDraft
+  /** A base64 data URL for a photo auto-fetched from the source page, or null if none was found. */
+  imageDataUrl: string | null
+}
