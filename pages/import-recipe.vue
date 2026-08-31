@@ -3,6 +3,8 @@ import type { RecipeDraft } from '~~/shared/types/itinerary'
 
 useHead({ title: 'Import Recipe - Tavira Recipe Maker' })
 
+const { user, authHeaders } = useAuth()
+
 const input = ref('')
 const draft = ref<RecipeDraft | null>(null)
 const importing = ref(false)
@@ -20,7 +22,8 @@ async function fetchDraft() {
   try {
     draft.value = await $fetch<RecipeDraft>('/api/recipes/import', {
       method: 'POST',
-      body: { input: input.value.trim() }
+      body: { input: input.value.trim() },
+      headers: authHeaders()
     })
   } catch (error: any) {
     errorMessage.value = error.data?.message ?? error.statusMessage ?? 'Something went wrong fetching that recipe.'
@@ -72,7 +75,7 @@ async function saveRecipe() {
   }
 
   try {
-    const saved = await $fetch<RecipeDraft>('/api/recipes', { method: 'POST', body: payload })
+    const saved = await $fetch<RecipeDraft>('/api/recipes', { method: 'POST', body: payload, headers: authHeaders() })
     savedRecipeName.value = saved.name
     draft.value = null
     input.value = ''
@@ -93,7 +96,9 @@ async function saveRecipe() {
       <p>Give a recipe's name, or a link to a recipe page, and the AI will fill in the details for you to review before saving.</p>
     </header>
 
-    <form v-if="!draft" class="import-form" @submit.prevent="fetchDraft">
+    <p v-if="!user" class="sign-in-hint">Sign in (top right) to import a recipe - it'll be saved under your name.</p>
+
+    <form v-else-if="!draft" class="import-form" @submit.prevent="fetchDraft">
       <label for="recipe-input">Recipe name or URL</label>
       <div class="import-row">
         <input
@@ -240,6 +245,15 @@ async function saveRecipe() {
 .hero p {
   color: var(--muted);
   margin: 0;
+}
+
+.sign-in-hint {
+  text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  color: var(--muted);
 }
 
 .import-form {

@@ -20,6 +20,16 @@ export interface Recipe {
   localContext: string | null
   ingredients: Ingredient[]
   instructions: string[]
+  /** Null for the built-in catalogue; set for a recipe someone imported/created. */
+  createdByEmail: string | null
+  createdByName: string | null
+  likeCount: number
+  likedByMe: boolean
+}
+
+export interface LikeStatus {
+  likeCount: number
+  likedByMe: boolean
 }
 
 export interface MealCourses {

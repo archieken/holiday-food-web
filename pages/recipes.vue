@@ -8,10 +8,12 @@ const { addingRecipeId, errorMessage, addExtraRecipe } = useItineraryPlanner()
 const { user, authHeaders } = useAuth()
 
 const { data: recipes, pending, error } = await useFetch<Recipe[]>('/api/recipes', {
-  query: { country: COUNTRY }
+  query: { country: COUNTRY },
+  headers: authHeaders()
 })
 
 const deletingRecipeId = ref<string | null>(null)
+const likingRecipeId = ref<string | null>(null)
 
 async function deleteRecipe(recipe: Recipe) {
   if (!confirm(`Delete "${recipe.name}"? This can't be undone.`)) return
@@ -32,6 +34,63 @@ async function deleteRecipe(recipe: Recipe) {
 function mealLabel(recipe: Recipe): string {
   const meal = capitalize(recipe.mealType)
   return recipe.course ? `${meal} - ${capitalize(recipe.course)}` : meal
+}
+
+function uploaderLabel(recipe: Recipe): string {
+  return recipe.createdByName ?? recipe.createdByEmail ?? 'Tavira Recipe Maker'
+}
+
+const typeFilter = ref('all')
+const uploaderFilter = ref('all')
+const sortBy = ref<'default' | 'mostLiked'>('default')
+
+const typeOptions = computed(() => {
+  const labels = new Set((recipes.value ?? []).map((recipe) => mealLabel(recipe)))
+  return [...labels].sort()
+})
+
+const uploaderOptions = computed(() => {
+  const labels = new Set((recipes.value ?? []).map((recipe) => uploaderLabel(recipe)))
+  return [...labels].sort()
+})
+
+const visibleRecipes = computed(() => {
+  let list = recipes.value ?? []
+
+  if (typeFilter.value !== 'all') {
+    list = list.filter((recipe) => mealLabel(recipe) === typeFilter.value)
+  }
+  if (uploaderFilter.value !== 'all') {
+    list = list.filter((recipe) => uploaderLabel(recipe) === uploaderFilter.value)
+  }
+  if (sortBy.value === 'mostLiked') {
+    list = [...list].sort((a, b) => b.likeCount - a.likeCount)
+  }
+
+  return list
+})
+
+async function toggleLike(recipe: Recipe) {
+  if (!user.value) {
+    errorMessage.value = 'Sign in to like a recipe.'
+    return
+  }
+
+  likingRecipeId.value = recipe.id
+  errorMessage.value = ''
+
+  try {
+    const status = await $fetch<{ likeCount: number; likedByMe: boolean }>(`/api/recipes/${recipe.id}/like`, {
+      method: recipe.likedByMe ? 'DELETE' : 'POST',
+      headers: authHeaders()
+    })
+    recipe.likeCount = status.likeCount
+    recipe.likedByMe = status.likedByMe
+  } catch (error: any) {
+    errorMessage.value = error.data?.message ?? error.statusMessage ?? 'Something went wrong updating that like.'
+  } finally {
+    likingRecipeId.value = null
+  }
 }
 
 // Not every recipe necessarily has a photo - hide the image area for any that 404 rather
@@ -79,8 +138,34 @@ async function printRecipe(recipe: Recipe) {
     <p v-else-if="error" class="error">Something went wrong loading the recipes.</p>
     <p v-else-if="errorMessage" class="error">{{ errorMessage }}</p>
 
+    <div v-if="recipes" class="filters">
+      <label class="filter">
+        <span>Type</span>
+        <select v-model="typeFilter">
+          <option value="all">All</option>
+          <option v-for="option in typeOptions" :key="option" :value="option">{{ option }}</option>
+        </select>
+      </label>
+
+      <label class="filter">
+        <span>Uploaded by</span>
+        <select v-model="uploaderFilter">
+          <option value="all">Anyone</option>
+          <option v-for="option in uploaderOptions" :key="option" :value="option">{{ option }}</option>
+        </select>
+      </label>
+
+      <label class="filter">
+        <span>Sort</span>
+        <select v-model="sortBy">
+          <option value="default">Default order</option>
+          <option value="mostLiked">Most liked</option>
+        </select>
+      </label>
+    </div>
+
     <div v-if="recipes" class="recipes">
-      <article v-for="recipe in recipes" :key="recipe.id" class="recipe-card">
+      <article v-for="recipe in visibleRecipes" :key="recipe.id" class="recipe-card">
         <div v-if="!brokenImages[recipe.id]" class="recipe-image-wrap">
           <img
             :src="`/api/recipes/${recipe.id}/image`"
@@ -90,13 +175,23 @@ async function printRecipe(recipe: Recipe) {
           >
         </div>
 
-        <h3>{{ recipe.name }}</h3>
+        <div class="title-row">
+          <h3>{{ recipe.name }}</h3>
+          <button
+            type="button" class="like-button" :class="{ liked: recipe.likedByMe }"
+            :disabled="likingRecipeId === recipe.id"
+            @click="toggleLike(recipe)"
+          >
+            {{ recipe.likedByMe ? '♥' : '♡' }} {{ recipe.likeCount }}
+          </button>
+        </div>
         <p class="recipe-meta">
           {{ mealLabel(recipe) }}
           <template v-if="placeLabel(recipe)"> &middot; {{ placeLabel(recipe) }}</template>
           <template v-if="recipe.difficulty"> &middot; {{ capitalize(recipe.difficulty) }}</template>
           &middot; Prep {{ recipe.prepTime }}m / Cook {{ recipe.cookTime }}m &middot; Serves {{ recipe.servings }}
         </p>
+        <p class="recipe-uploader">Uploaded by {{ uploaderLabel(recipe) }}</p>
         <p v-if="recipe.localContext" class="recipe-context">{{ recipe.localContext }}</p>
 
         <details class="recipe-details">
@@ -171,6 +266,33 @@ async function printRecipe(recipe: Recipe) {
   font-weight: 600;
 }
 
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 24px;
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.filter select {
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: var(--ink);
+}
+
 .recipes {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -199,13 +321,52 @@ async function printRecipe(recipe: Recipe) {
   object-fit: cover;
 }
 
+.title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 4px;
+}
+
 .recipe-card h3 {
   color: var(--portugal-red);
-  margin: 0 0 4px;
+  margin: 0;
+}
+
+.like-button {
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.like-button.liked {
+  color: var(--portugal-red);
+  border-color: var(--portugal-red);
+}
+
+.like-button:hover:not(:disabled) {
+  background: var(--bg);
+}
+
+.like-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .recipe-meta {
   font-size: 0.78rem;
+  color: var(--muted);
+  margin: 0 0 4px;
+}
+
+.recipe-uploader {
+  font-size: 0.75rem;
   color: var(--muted);
   margin: 0 0 8px;
 }

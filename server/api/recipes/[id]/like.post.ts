@@ -1,15 +1,14 @@
-import type { RecipeDraft, RecipeImportRequest } from '~~/shared/types/itinerary'
+import type { LikeStatus } from '~~/shared/types/itinerary'
 
 export default defineEventHandler(async (event) => {
   const { apiBase } = useRuntimeConfig()
-  const body = await readBody<RecipeImportRequest>(event)
+  const id = getRouterParam(event, 'id')
   const authorization = getHeader(event, 'authorization')
 
   try {
-    return await $fetch<RecipeDraft>('/api/recipes/import', {
+    return await $fetch<LikeStatus>(`/api/recipes/${id}/like`, {
       baseURL: apiBase,
       method: 'POST',
-      body,
       headers: authorization ? { Authorization: authorization } : {}
     })
   } catch (error: any) {
