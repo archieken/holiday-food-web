@@ -1,15 +1,16 @@
-import type { Recipe } from '~~/shared/types/itinerary'
-
 export default defineEventHandler(async (event) => {
   const { apiBase } = useRuntimeConfig()
   const id = getRouterParam(event, 'id')
+  const commentId = getRouterParam(event, 'commentId')
   const authorization = getHeader(event, 'authorization')
 
   try {
-    return await $fetch<Recipe>(`/api/recipes/${id}`, {
+    await $fetch(`/api/recipes/${id}/comments/${commentId}`, {
       baseURL: apiBase,
+      method: 'DELETE',
       headers: authorization ? { Authorization: authorization } : {}
     })
+    return { success: true }
   } catch (error: any) {
     throw createError({
       statusCode: error.response?.status ?? 502,

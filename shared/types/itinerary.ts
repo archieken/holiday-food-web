@@ -32,6 +32,20 @@ export interface LikeStatus {
   likedByMe: boolean
 }
 
+export interface Comment {
+  id: string
+  recipeId: string
+  authorEmail: string
+  authorName: string | null
+  text: string
+  /** ISO 8601 timestamp. */
+  createdAt: string
+}
+
+export interface CreateCommentRequest {
+  text: string
+}
+
 export interface MealCourses {
   starter: Recipe | null
   main: Recipe | null

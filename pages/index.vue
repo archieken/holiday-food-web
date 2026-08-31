@@ -18,7 +18,6 @@ const {
   openShoppingList,
   refreshRecipe,
   removeRecipe,
-  addExtraRecipe,
   removeExtraRecipe,
   assignExtraToDay
 } = useItineraryPlanner()
@@ -48,24 +47,6 @@ function setDayForExtra(recipe: Recipe, day: number) {
   extraRecipeDay.value[recipe.id] = day
 }
 
-// A recipe PDF's QR code links here as /?addRecipe=<id>, so scanning it drops the recipe
-// straight into the trip as an extra (generating a default itinerary first if none exists yet).
-const route = useRoute()
-const router = useRouter()
-
-onMounted(async () => {
-  const addRecipeId = route.query.addRecipe
-  if (typeof addRecipeId !== 'string') return
-
-  await router.replace({ query: { ...route.query, addRecipe: undefined } })
-
-  try {
-    const recipe = await $fetch<Recipe>(`/api/recipes/${addRecipeId}`)
-    await addExtraRecipe(recipe)
-  } catch (error: any) {
-    errorMessage.value = error.data?.message ?? error.statusMessage ?? 'Could not find that recipe.'
-  }
-})
 </script>
 
 <template>

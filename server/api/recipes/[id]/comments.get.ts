@@ -1,15 +1,11 @@
-import type { Recipe } from '~~/shared/types/itinerary'
+import type { Comment } from '~~/shared/types/itinerary'
 
 export default defineEventHandler(async (event) => {
   const { apiBase } = useRuntimeConfig()
   const id = getRouterParam(event, 'id')
-  const authorization = getHeader(event, 'authorization')
 
   try {
-    return await $fetch<Recipe>(`/api/recipes/${id}`, {
-      baseURL: apiBase,
-      headers: authorization ? { Authorization: authorization } : {}
-    })
+    return await $fetch<Comment[]>(`/api/recipes/${id}/comments`, { baseURL: apiBase })
   } catch (error: any) {
     throw createError({
       statusCode: error.response?.status ?? 502,

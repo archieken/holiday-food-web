@@ -166,17 +166,19 @@ async function printRecipe(recipe: Recipe) {
 
     <div v-if="recipes" class="recipes">
       <article v-for="recipe in visibleRecipes" :key="recipe.id" class="recipe-card">
-        <div v-if="!brokenImages[recipe.id]" class="recipe-image-wrap">
-          <img
-            :src="`/api/recipes/${recipe.id}/image`"
-            :alt="recipe.name"
-            class="recipe-image"
-            @error="brokenImages[recipe.id] = true"
-          >
-        </div>
+        <NuxtLink :to="`/recipes/${recipe.id}`" class="recipe-link">
+          <div v-if="!brokenImages[recipe.id]" class="recipe-image-wrap">
+            <img
+              :src="`/api/recipes/${recipe.id}/image`"
+              :alt="recipe.name"
+              class="recipe-image"
+              @error="brokenImages[recipe.id] = true"
+            >
+          </div>
+        </NuxtLink>
 
         <div class="title-row">
-          <h3>{{ recipe.name }}</h3>
+          <h3><NuxtLink :to="`/recipes/${recipe.id}`" class="recipe-link">{{ recipe.name }}</NuxtLink></h3>
           <button
             type="button" class="like-button" :class="{ liked: recipe.likedByMe }"
             :disabled="likingRecipeId === recipe.id"
@@ -332,6 +334,16 @@ async function printRecipe(recipe: Recipe) {
 .recipe-card h3 {
   color: var(--portugal-red);
   margin: 0;
+}
+
+.recipe-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.recipe-link:hover {
+  text-decoration: underline;
 }
 
 .like-button {
