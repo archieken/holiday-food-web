@@ -219,7 +219,7 @@ async function printRecipe(recipe: Recipe) {
           :disabled="addingRecipeId === recipe.id"
           @click="addExtraRecipe(recipe)"
         >
-          {{ addingRecipeId === recipe.id ? 'Adding…' : 'Add without a day' }}
+          {{ addingRecipeId === recipe.id ? 'Adding…' : 'Add to Itinerary' }}
         </button>
 
         <button

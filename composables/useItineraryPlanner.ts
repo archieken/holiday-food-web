@@ -244,7 +244,7 @@ export function useItineraryPlanner() {
   /**
    * Adds a recipe to the trip without tying it to any day or meal - it's still
    * scaled to the trip-wide servings count and folded into the shopping list. Used by the
-   * Explore Recipes page's "Add without a day" button and by a recipe PDF's QR code.
+   * Explore Recipes page's "Add to Itinerary" button and by a recipe PDF's QR code.
    */
   async function addExtraRecipe(recipe: Recipe) {
     addingRecipeId.value = recipe.id
@@ -288,7 +288,7 @@ export function useItineraryPlanner() {
 
   /**
    * Moves a recipe out of "extras" and into a specific day + slot - the only way a recipe
-   * can be assigned to a day, since Explore Recipes only offers "Add without a day". The
+   * can be assigned to a day, since Explore Recipes only offers "Add to Itinerary". The
    * caller picks the slot (see {@link targetSlotsFor}) since a Main recipe could go into
    * either Lunch or Dinner.
    */
