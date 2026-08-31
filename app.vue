@@ -133,22 +133,58 @@ async function openPdf() {
   }
 }
 
+type Meal = 'BREAKFAST' | 'LUNCH' | 'DINNER'
+type CourseName = 'STARTER' | 'MAIN' | 'DESSERT'
+
 interface MealEntry {
   label: string
   recipe: Recipe
+  meal: Meal
+  course: CourseName | null
 }
 
 function mealEntries(day: DayPlan): MealEntry[] {
-  const candidates: { label: string; recipe: Recipe | null }[] = [
-    { label: 'Breakfast', recipe: day.breakfast },
-    { label: 'Lunch - Starter', recipe: day.lunch.starter },
-    { label: 'Lunch - Main', recipe: day.lunch.main },
-    { label: 'Lunch - Dessert', recipe: day.lunch.dessert },
-    { label: 'Dinner - Starter', recipe: day.dinner.starter },
-    { label: 'Dinner - Main', recipe: day.dinner.main },
-    { label: 'Dinner - Dessert', recipe: day.dinner.dessert }
+  const candidates: { label: string; recipe: Recipe | null; meal: Meal; course: CourseName | null }[] = [
+    { label: 'Breakfast', recipe: day.breakfast, meal: 'BREAKFAST', course: null },
+    { label: 'Lunch - Starter', recipe: day.lunch.starter, meal: 'LUNCH', course: 'STARTER' },
+    { label: 'Lunch - Main', recipe: day.lunch.main, meal: 'LUNCH', course: 'MAIN' },
+    { label: 'Lunch - Dessert', recipe: day.lunch.dessert, meal: 'LUNCH', course: 'DESSERT' },
+    { label: 'Dinner - Starter', recipe: day.dinner.starter, meal: 'DINNER', course: 'STARTER' },
+    { label: 'Dinner - Main', recipe: day.dinner.main, meal: 'DINNER', course: 'MAIN' },
+    { label: 'Dinner - Dessert', recipe: day.dinner.dessert, meal: 'DINNER', course: 'DESSERT' }
   ]
   return candidates.filter((entry): entry is MealEntry => entry.recipe !== null)
+}
+
+const refreshingSlot = ref<string | null>(null)
+
+function slotKey(day: number, meal: Meal, course: CourseName | null): string {
+  return `${day}-${meal}-${course ?? ''}`
+}
+
+async function refreshRecipe(dayNumber: number, entry: MealEntry) {
+  const key = slotKey(dayNumber, entry.meal, entry.course)
+  refreshingSlot.value = key
+  errorMessage.value = ''
+
+  try {
+    itinerary.value = await $fetch<ItineraryResponse>('/api/itinerary/refresh-recipe', {
+      method: 'POST',
+      body: {
+        country: country.value,
+        town: town.value || null,
+        days: daySelections.value,
+        day: dayNumber,
+        meal: entry.meal,
+        course: entry.course,
+        excludeRecipeId: entry.recipe.id
+      }
+    })
+  } catch (error: any) {
+    errorMessage.value = error.data?.message ?? error.statusMessage ?? 'Something went wrong refreshing that recipe.'
+  } finally {
+    refreshingSlot.value = null
+  }
 }
 
 function placeLabel(recipe: Recipe): string | null {
@@ -261,7 +297,16 @@ function capitalize(value: string): string {
           <p v-if="mealEntries(day).length === 0" class="meal-context">No meals selected for this day.</p>
 
           <div v-for="entry in mealEntries(day)" :key="entry.label" class="meal">
-            <h4>{{ entry.label }}: {{ entry.recipe.name }}</h4>
+            <div class="meal-heading-row">
+              <h4>{{ entry.label }}: {{ entry.recipe.name }}</h4>
+              <button
+                type="button" class="refresh-button"
+                :disabled="refreshingSlot === slotKey(day.day, entry.meal, entry.course)"
+                @click="refreshRecipe(day.day, entry)"
+              >
+                {{ refreshingSlot === slotKey(day.day, entry.meal, entry.course) ? 'Refreshing…' : 'Try another' }}
+              </button>
+            </div>
             <p class="meal-meta">
               <template v-if="placeLabel(entry.recipe)">{{ placeLabel(entry.recipe) }} &middot; </template>
               <template v-if="entry.recipe.difficulty">{{ capitalize(entry.recipe.difficulty) }} &middot; </template>
@@ -527,7 +572,35 @@ button[type='submit']:disabled {
 .meal h4 {
   color: var(--portugal-green);
   font-size: 0.95rem;
+  margin: 0;
+}
+
+.meal-heading-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
   margin: 0 0 4px;
+}
+
+.refresh-button {
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 0.7rem;
+  color: var(--portugal-green);
+  cursor: pointer;
+}
+
+.refresh-button:hover:not(:disabled) {
+  background: var(--bg);
+}
+
+.refresh-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .meal-meta {

@@ -61,3 +61,10 @@ export interface ItineraryRequest {
   town?: string | null
   days: MealSelection[]
 }
+
+export interface RefreshRecipeRequest extends ItineraryRequest {
+  day: number
+  meal: 'BREAKFAST' | 'LUNCH' | 'DINNER'
+  course: 'STARTER' | 'MAIN' | 'DESSERT' | null
+  excludeRecipeId: string
+}
