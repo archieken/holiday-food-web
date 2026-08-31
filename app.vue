@@ -1,18 +1,14 @@
 <script setup lang="ts">
 import type { CourseSelection, DayPlan, ItineraryResponse, MealSelection, Recipe } from '~~/shared/types/itinerary'
 
-const { data: countries } = await useFetch<string[]>('/api/countries')
+useHead({ title: 'Tavira Recipe Maker' })
 
-const country = ref(countries.value?.[0] ?? '')
-const town = ref('')
+// Every recipe is Portuguese, drawn from the full national catalogue - there's no
+// country/town filtering to select here.
+const COUNTRY = 'Portugal'
+
 const days = ref(3)
 const tripServings = ref(2)
-
-const { data: towns } = await useFetch<string[]>('/api/towns', { query: { country } })
-
-watch(towns, (available) => {
-  if (town.value && !available?.includes(town.value)) town.value = ''
-})
 
 function defaultSelection(servings: number): MealSelection {
   return {
@@ -84,8 +80,6 @@ const pdfLoading = ref(false)
 const errorMessage = ref('')
 
 async function generate() {
-  if (!country.value) return
-
   loading.value = true
   errorMessage.value = ''
   itinerary.value = null
@@ -93,7 +87,7 @@ async function generate() {
   try {
     itinerary.value = await $fetch<ItineraryResponse>('/api/itinerary', {
       method: 'POST',
-      body: { country: country.value, town: town.value || null, days: daySelections.value }
+      body: { country: COUNTRY, days: daySelections.value }
     })
   } catch (error: any) {
     errorMessage.value = error.data?.message ?? error.statusMessage ?? 'Something went wrong generating the itinerary.'
@@ -103,8 +97,6 @@ async function generate() {
 }
 
 async function openPdf() {
-  if (!country.value) return
-
   // Open the tab synchronously, inside the click's user gesture, so the
   // browser doesn't treat it as a popup once we redirect it after the
   // (async) PDF fetch below resolves.
@@ -116,7 +108,7 @@ async function openPdf() {
   try {
     const blob = await $fetch<Blob>('/api/itinerary/pdf', {
       method: 'POST',
-      body: { country: country.value, town: town.value || null, days: daySelections.value },
+      body: { country: COUNTRY, days: daySelections.value },
       responseType: 'blob'
     })
     const url = URL.createObjectURL(blob)
@@ -171,8 +163,7 @@ async function refreshRecipe(dayNumber: number, entry: MealEntry) {
     itinerary.value = await $fetch<ItineraryResponse>('/api/itinerary/refresh-recipe', {
       method: 'POST',
       body: {
-        country: country.value,
-        town: town.value || null,
+        country: COUNTRY,
         days: daySelections.value,
         day: dayNumber,
         meal: entry.meal,
@@ -202,27 +193,12 @@ function capitalize(value: string): string {
     <NuxtRouteAnnouncer />
 
     <header class="hero">
-      <h1>Holiday Food Itinerary</h1>
-      <p>Pick a country, optionally a town for a mix of regional and national dishes, how many days you're staying, and which meals and courses you want each day.</p>
+      <h1>Tavira Recipe Maker</h1>
+      <p>Pick how many days you're staying and how many people you're cooking for, then choose which meals and courses you want each day.</p>
     </header>
 
     <form class="planner" @submit.prevent="generate">
       <div class="planner-top">
-        <div class="field">
-          <label for="country">Country</label>
-          <select id="country" v-model="country">
-            <option v-for="c in countries" :key="c" :value="c">{{ c }}</option>
-          </select>
-        </div>
-
-        <div class="field">
-          <label for="town">Town</label>
-          <select id="town" v-model="town">
-            <option value="">Any (nationwide)</option>
-            <option v-for="t in towns" :key="t" :value="t">{{ t }}</option>
-          </select>
-        </div>
-
         <div class="field">
           <label for="days">Days</label>
           <input id="days" v-model.number="days" type="number" min="1" max="60" required>
@@ -284,7 +260,7 @@ function capitalize(value: string): string {
 
     <section v-if="itinerary" class="results">
       <div class="results-header">
-        <h2>{{ itinerary.town ? `${itinerary.town}, ${itinerary.country}` : itinerary.country }} — {{ itinerary.days }}-day trip</h2>
+        <h2>{{ itinerary.days }}-day trip</h2>
         <button type="button" class="pdf-button" :disabled="pdfLoading" @click="openPdf">
           {{ pdfLoading ? 'Preparing PDF…' : 'View / print PDF' }}
         </button>
@@ -414,7 +390,6 @@ body {
   color: var(--muted);
 }
 
-.field select,
 .field input {
   padding: 8px 10px;
   border: 1px solid var(--border);
