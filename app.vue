@@ -221,6 +221,7 @@ function capitalize(value: string): string {
         <ul>
           <li v-for="ingredient in itinerary.shoppingList" :key="ingredient.name">
             {{ ingredient.quantity }} {{ ingredient.unit }} {{ ingredient.name }}
+            <span v-if="ingredient.translatedName" class="ingredient-translation">({{ ingredient.translatedName }})</span>
           </li>
         </ul>
       </div>
@@ -471,6 +472,11 @@ button[type='submit']:disabled {
 .shopping-list li {
   font-size: 0.9rem;
   margin-bottom: 2px;
+}
+
+.ingredient-translation {
+  color: var(--muted);
+  font-style: italic;
 }
 
 .shopping-list {
