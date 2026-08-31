@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DayPlan, ItineraryResponse, MealSelection, Recipe } from '~~/shared/types/itinerary'
+import type { CourseSelection, DayPlan, ItineraryResponse, MealSelection, Recipe } from '~~/shared/types/itinerary'
 
 const { data: countries } = await useFetch<string[]>('/api/countries')
 
@@ -13,12 +13,35 @@ watch(towns, (available) => {
   if (town.value && !available?.includes(town.value)) town.value = ''
 })
 
+const DEFAULT_SERVINGS = 2
+
 function defaultSelection(): MealSelection {
   return {
-    breakfast: true,
-    lunch: { starter: false, main: true, dessert: false },
-    dinner: { starter: false, main: true, dessert: false }
+    breakfast: DEFAULT_SERVINGS,
+    lunch: { starter: null, main: DEFAULT_SERVINGS, dessert: null },
+    dinner: { starter: null, main: DEFAULT_SERVINGS, dessert: null }
   }
+}
+
+/** Converts a number input's raw string value to a servings count, or null if it's empty/invalid. */
+function toServings(value: string): number | null {
+  if (value === '') return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+}
+
+interface ServingsField {
+  label: string
+  value: number | null
+  set: (value: number | null) => void
+}
+
+function servingsFields(mealLabel: string, courses: CourseSelection): ServingsField[] {
+  return [
+    { label: `${mealLabel} - Starter`, value: courses.starter, set: (v) => { courses.starter = v } },
+    { label: `${mealLabel} - Main`, value: courses.main, set: (v) => { courses.main = v } },
+    { label: `${mealLabel} - Dessert`, value: courses.dessert, set: (v) => { courses.dessert = v } }
+  ]
 }
 
 const daySelections = ref<MealSelection[]>(Array.from({ length: days.value }, defaultSelection))
@@ -156,24 +179,39 @@ function capitalize(value: string): string {
       <div class="day-selectors">
         <div v-for="(selection, index) in daySelections" :key="index" class="day-selector">
           <h4>Day {{ index + 1 }}</h4>
+          <p class="servings-hint">Enter servings, or leave blank to skip</p>
 
-          <label class="checkbox-row">
-            <input v-model="selection.breakfast" type="checkbox">
-            Breakfast
+          <label class="servings-row">
+            <span>Breakfast</span>
+            <input
+              type="number" min="1" max="50" placeholder="—" class="servings-input"
+              :value="selection.breakfast ?? ''"
+              @input="selection.breakfast = toServings(($event.target as HTMLInputElement).value)"
+            >
           </label>
 
           <div class="course-group">
             <span class="course-group-label">Lunch</span>
-            <label class="checkbox-row"><input v-model="selection.lunch.starter" type="checkbox"> Starter</label>
-            <label class="checkbox-row"><input v-model="selection.lunch.main" type="checkbox"> Main</label>
-            <label class="checkbox-row"><input v-model="selection.lunch.dessert" type="checkbox"> Dessert</label>
+            <label v-for="field in servingsFields('Lunch', selection.lunch)" :key="field.label" class="servings-row">
+              <span>{{ field.label.split(' - ')[1] }}</span>
+              <input
+                type="number" min="1" max="50" placeholder="—" class="servings-input"
+                :value="field.value ?? ''"
+                @input="field.set(toServings(($event.target as HTMLInputElement).value))"
+              >
+            </label>
           </div>
 
           <div class="course-group">
             <span class="course-group-label">Dinner</span>
-            <label class="checkbox-row"><input v-model="selection.dinner.starter" type="checkbox"> Starter</label>
-            <label class="checkbox-row"><input v-model="selection.dinner.main" type="checkbox"> Main</label>
-            <label class="checkbox-row"><input v-model="selection.dinner.dessert" type="checkbox"> Dessert</label>
+            <label v-for="field in servingsFields('Dinner', selection.dinner)" :key="field.label" class="servings-row">
+              <span>{{ field.label.split(' - ')[1] }}</span>
+              <input
+                type="number" min="1" max="50" placeholder="—" class="servings-input"
+                :value="field.value ?? ''"
+                @input="field.set(toServings(($event.target as HTMLInputElement).value))"
+              >
+            </label>
           </div>
         </div>
       </div>
@@ -317,7 +355,7 @@ body {
 
 .day-selectors {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 12px;
   margin-bottom: 16px;
 }
@@ -330,18 +368,33 @@ body {
 }
 
 .day-selector h4 {
-  margin: 0 0 8px;
+  margin: 0 0 4px;
   color: var(--portugal-red);
   font-size: 0.9rem;
 }
 
-.checkbox-row {
+.servings-hint {
+  margin: 0 0 8px;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.servings-row {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 6px;
   font-size: 0.85rem;
   margin-bottom: 4px;
-  cursor: pointer;
+}
+
+.servings-input {
+  width: 48px;
+  padding: 2px 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  text-align: center;
 }
 
 .course-group {

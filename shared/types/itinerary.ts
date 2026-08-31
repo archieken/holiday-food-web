@@ -43,14 +43,15 @@ export interface ItineraryResponse {
   shoppingList: Ingredient[]
 }
 
+/** Number of people to cook that course for, or null to skip it. */
 export interface CourseSelection {
-  starter: boolean
-  main: boolean
-  dessert: boolean
+  starter: number | null
+  main: number | null
+  dessert: number | null
 }
 
 export interface MealSelection {
-  breakfast: boolean
+  breakfast: number | null
   lunch: CourseSelection
   dinner: CourseSelection
 }
