@@ -29,6 +29,10 @@ async function handleAdd(recipe: Recipe) {
   await addRecipe(dayFor(recipe), recipe.mealType, recipe.course, recipe)
 }
 
+// Not every recipe necessarily has a photo - hide the image area for any that 404 rather
+// than showing a broken-image icon.
+const brokenImages = ref<Record<string, boolean>>({})
+
 const printingRecipeId = ref<string | null>(null)
 
 async function printRecipe(recipe: Recipe) {
@@ -72,6 +76,15 @@ async function printRecipe(recipe: Recipe) {
 
     <div v-if="recipes" class="recipes">
       <article v-for="recipe in recipes" :key="recipe.id" class="recipe-card">
+        <div v-if="!brokenImages[recipe.id]" class="recipe-image-wrap">
+          <img
+            :src="`/api/recipes/${recipe.id}/image`"
+            :alt="recipe.name"
+            class="recipe-image"
+            @error="brokenImages[recipe.id] = true"
+          >
+        </div>
+
         <h3>{{ recipe.name }}</h3>
         <p class="recipe-meta">
           {{ mealLabel(recipe) }}
@@ -161,6 +174,19 @@ async function printRecipe(recipe: Recipe) {
   padding: 16px;
   display: flex;
   flex-direction: column;
+}
+
+.recipe-image-wrap {
+  margin: -16px -16px 12px;
+  border-radius: 12px 12px 0 0;
+  overflow: hidden;
+}
+
+.recipe-image {
+  display: block;
+  width: 100%;
+  height: 160px;
+  object-fit: cover;
 }
 
 .recipe-card h3 {
