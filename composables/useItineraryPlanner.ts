@@ -1,25 +1,17 @@
-import type { CourseSelection, DayPlan, ExtraRecipeSelection, ItineraryResponse, MealSelection, Recipe } from '~~/shared/types/itinerary'
+import type { DayPlan, ExtraRecipeSelection, ItineraryResponse, MealSelection, MealSlot, Recipe } from '~~/shared/types/itinerary'
 
 // Every recipe is Portuguese, drawn from the full national catalogue - there's no
 // country/town filtering to select here.
 export const COUNTRY = 'Portugal'
 
-export type Meal = 'BREAKFAST' | 'LUNCH' | 'DINNER'
-export type CourseName = 'STARTER' | 'MAIN' | 'DESSERT'
-
 export interface MealEntry {
   label: string
   recipe: Recipe
-  meal: Meal
-  course: CourseName | null
+  slot: MealSlot
 }
 
 function defaultSelection(servings: number): MealSelection {
-  return {
-    breakfast: servings,
-    lunch: { starter: null, main: servings, dessert: null },
-    dinner: { starter: null, main: servings, dessert: null }
-  }
+  return { breakfast: servings, lunch: servings, dinner: servings, dessert: null }
 }
 
 /** Converts a number input's raw string value to a servings count, or null if it's empty/invalid. */
@@ -29,21 +21,33 @@ export function toServings(value: string): number | null {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null
 }
 
-export function slotKey(day: number, meal: Meal, course: CourseName | null): string {
-  return `${day}-${meal}-${course ?? ''}`
+export function slotKey(day: number, slot: MealSlot): string {
+  return `${day}-${slot}`
 }
 
 export function mealEntries(day: DayPlan): MealEntry[] {
-  const candidates: { label: string; recipe: Recipe | null; meal: Meal; course: CourseName | null }[] = [
-    { label: 'Breakfast', recipe: day.breakfast, meal: 'BREAKFAST', course: null },
-    { label: 'Lunch - Starter', recipe: day.lunch.starter, meal: 'LUNCH', course: 'STARTER' },
-    { label: 'Lunch - Main', recipe: day.lunch.main, meal: 'LUNCH', course: 'MAIN' },
-    { label: 'Lunch - Dessert', recipe: day.lunch.dessert, meal: 'LUNCH', course: 'DESSERT' },
-    { label: 'Dinner - Starter', recipe: day.dinner.starter, meal: 'DINNER', course: 'STARTER' },
-    { label: 'Dinner - Main', recipe: day.dinner.main, meal: 'DINNER', course: 'MAIN' },
-    { label: 'Dinner - Dessert', recipe: day.dinner.dessert, meal: 'DINNER', course: 'DESSERT' }
+  const candidates: { label: string; recipe: Recipe | null; slot: MealSlot }[] = [
+    { label: 'Breakfast', recipe: day.breakfast, slot: 'BREAKFAST' },
+    { label: 'Lunch', recipe: day.lunch, slot: 'LUNCH' },
+    { label: 'Dinner', recipe: day.dinner, slot: 'DINNER' },
+    { label: 'Dessert', recipe: day.dessert, slot: 'DESSERT' }
   ]
   return candidates.filter((entry): entry is MealEntry => entry.recipe !== null)
+}
+
+/**
+ * Which day slot(s) a recipe can be assigned to, based on its course. A Main
+ * recipe can go into either Lunch or Dinner (there's no lunch/dinner
+ * distinction any more); a Starter has no day slot at all, so it can only
+ * ever be added as an extra.
+ */
+export function targetSlotsFor(recipe: Recipe): MealSlot[] {
+  switch (recipe.course) {
+    case 'BREAKFAST': return ['BREAKFAST']
+    case 'MAIN': return ['LUNCH', 'DINNER']
+    case 'DESSERT': return ['DESSERT']
+    default: return []
+  }
 }
 
 export function placeLabel(recipe: Recipe): string | null {
@@ -89,8 +93,8 @@ export function useItineraryPlanner() {
     }
   })
 
-  // The trip-wide servings selector sets breakfast + every main course across all days;
-  // starters/desserts are left alone since they default to (and usually stay) unselected.
+  // The trip-wide servings selector sets Breakfast, Lunch and Dinner across all days;
+  // Dessert is left alone since it defaults to (and usually stays) unselected.
   watch(tripServings, (count) => {
     const clamped = Math.min(Math.max(Math.round(count) || 1, 1), 50)
     if (clamped !== count) {
@@ -100,8 +104,8 @@ export function useItineraryPlanner() {
 
     for (const selection of daySelections.value) {
       selection.breakfast = clamped
-      selection.lunch.main = clamped
-      selection.dinner.main = clamped
+      selection.lunch = clamped
+      selection.dinner = clamped
     }
   })
 
@@ -146,7 +150,7 @@ export function useItineraryPlanner() {
   }
 
   async function refreshRecipe(dayNumber: number, entry: MealEntry) {
-    const key = slotKey(dayNumber, entry.meal, entry.course)
+    const key = slotKey(dayNumber, entry.slot)
     refreshingSlot.value = key
     errorMessage.value = ''
 
@@ -158,8 +162,7 @@ export function useItineraryPlanner() {
           days: daySelections.value,
           extraRecipes: extraRecipes.value,
           day: dayNumber,
-          meal: entry.meal,
-          course: entry.course,
+          slot: entry.slot,
           excludeRecipeId: entry.recipe.id
         }
       })
@@ -170,14 +173,14 @@ export function useItineraryPlanner() {
     }
   }
 
-  /** Clears a single (day, meal, course) slot, dropping that recipe out of the trip entirely. */
+  /** Clears a single (day, slot) meal, dropping that recipe out of the trip entirely. */
   async function removeRecipe(dayNumber: number, entry: MealEntry) {
-    const key = slotKey(dayNumber, entry.meal, entry.course)
+    const key = slotKey(dayNumber, entry.slot)
     refreshingSlot.value = key
     errorMessage.value = ''
 
     const selection = daySelections.value[dayNumber - 1]
-    if (selection) setSelectionValue(selection, entry.meal, entry.course, null)
+    if (selection) setSelectionValue(selection, entry.slot, null)
 
     try {
       itinerary.value = await $fetch<ItineraryResponse>('/api/itinerary', {
@@ -191,37 +194,32 @@ export function useItineraryPlanner() {
     }
   }
 
-  /** Which selection field on a MealSelection a given (meal, course) slot corresponds to. */
-  function selectionValue(selection: MealSelection, meal: Meal, course: CourseName | null): number | null {
-    if (meal === 'BREAKFAST') return selection.breakfast
-    const courses: CourseSelection = meal === 'LUNCH' ? selection.lunch : selection.dinner
-    if (course === 'STARTER') return courses.starter
-    if (course === 'MAIN') return courses.main
-    return courses.dessert
+  /** Which selection field on a MealSelection a given slot corresponds to. */
+  function selectionValue(selection: MealSelection, slot: MealSlot): number | null {
+    if (slot === 'BREAKFAST') return selection.breakfast
+    if (slot === 'LUNCH') return selection.lunch
+    if (slot === 'DINNER') return selection.dinner
+    return selection.dessert
   }
 
-  function setSelectionValue(selection: MealSelection, meal: Meal, course: CourseName | null, value: number | null) {
-    if (meal === 'BREAKFAST') {
-      selection.breakfast = value
-      return
-    }
-    const courses: CourseSelection = meal === 'LUNCH' ? selection.lunch : selection.dinner
-    if (course === 'STARTER') courses.starter = value
-    else if (course === 'MAIN') courses.main = value
-    else courses.dessert = value
+  function setSelectionValue(selection: MealSelection, slot: MealSlot, value: number | null) {
+    if (slot === 'BREAKFAST') selection.breakfast = value
+    else if (slot === 'LUNCH') selection.lunch = value
+    else if (slot === 'DINNER') selection.dinner = value
+    else selection.dessert = value
   }
 
   /**
-   * Places an exact recipe into a specific (day, meal, course) slot, activating that
+   * Places an exact recipe into a specific (day, slot) meal, activating that
    * slot with the trip-wide servings count first if it wasn't already selected.
    */
-  async function addRecipe(dayNumber: number, meal: Meal, course: CourseName | null, recipe: Recipe) {
+  async function addRecipe(dayNumber: number, slot: MealSlot, recipe: Recipe) {
     addingRecipeId.value = recipe.id
     errorMessage.value = ''
 
     const selection = daySelections.value[dayNumber - 1]
-    if (selection && selectionValue(selection, meal, course) === null) {
-      setSelectionValue(selection, meal, course, tripServings.value)
+    if (selection && selectionValue(selection, slot) === null) {
+      setSelectionValue(selection, slot, tripServings.value)
     }
 
     try {
@@ -232,8 +230,7 @@ export function useItineraryPlanner() {
           days: daySelections.value,
           extraRecipes: extraRecipes.value,
           day: dayNumber,
-          meal,
-          course,
+          slot,
           recipeId: recipe.id
         }
       })
@@ -245,7 +242,7 @@ export function useItineraryPlanner() {
   }
 
   /**
-   * Adds a recipe to the trip without tying it to any day, meal, or course - it's still
+   * Adds a recipe to the trip without tying it to any day or meal - it's still
    * scaled to the trip-wide servings count and folded into the shopping list. Used by the
    * Explore Recipes page's "Add without a day" button and by a recipe PDF's QR code.
    */
@@ -290,13 +287,14 @@ export function useItineraryPlanner() {
   }
 
   /**
-   * Moves a recipe out of "extras" and into a specific day, using its own fixed meal and
-   * course - the only way a recipe can be assigned to a day, since Explore Recipes only
-   * offers "Add without a day".
+   * Moves a recipe out of "extras" and into a specific day + slot - the only way a recipe
+   * can be assigned to a day, since Explore Recipes only offers "Add without a day". The
+   * caller picks the slot (see {@link targetSlotsFor}) since a Main recipe could go into
+   * either Lunch or Dinner.
    */
-  async function assignExtraToDay(recipe: Recipe, dayNumber: number) {
+  async function assignExtraToDay(recipe: Recipe, dayNumber: number, slot: MealSlot) {
     extraRecipes.value = extraRecipes.value.filter((extra) => extra.recipeId !== recipe.id)
-    await addRecipe(dayNumber, recipe.mealType, recipe.course, recipe)
+    await addRecipe(dayNumber, slot, recipe)
   }
 
   return {

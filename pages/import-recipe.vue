@@ -54,13 +54,6 @@ function removeStep(index: number) {
   draft.value?.instructions.splice(index, 1)
 }
 
-// Breakfast recipes have no course - drop it if the meal type changes to breakfast.
-watch(() => draft.value?.mealType, (mealType) => {
-  if (mealType === 'BREAKFAST' && draft.value) {
-    draft.value.course = null
-  }
-})
-
 async function saveRecipe() {
   if (!draft.value) return
 
@@ -131,18 +124,9 @@ async function saveRecipe() {
         </label>
 
         <label class="field">
-          <span>Meal</span>
-          <select v-model="draft.mealType">
-            <option value="BREAKFAST">Breakfast</option>
-            <option value="LUNCH">Lunch</option>
-            <option value="DINNER">Dinner</option>
-          </select>
-        </label>
-
-        <label v-if="draft.mealType !== 'BREAKFAST'" class="field">
           <span>Course</span>
           <select v-model="draft.course">
-            <option :value="null">—</option>
+            <option value="BREAKFAST">Breakfast</option>
             <option value="STARTER">Starter</option>
             <option value="MAIN">Main</option>
             <option value="DESSERT">Dessert</option>

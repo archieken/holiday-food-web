@@ -15,8 +15,7 @@ const { data: recipe, pending, error } = await useFetch<Recipe>(`/api/recipes/${
 useHead(() => ({ title: recipe.value ? `${recipe.value.name} - Tavira Recipe Maker` : 'Recipe - Tavira Recipe Maker' }))
 
 function mealLabel(r: Recipe): string {
-  const meal = capitalize(r.mealType)
-  return r.course ? `${meal} - ${capitalize(r.course)}` : meal
+  return capitalize(r.course)
 }
 
 function uploaderLabel(r: Recipe): string {

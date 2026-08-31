@@ -32,8 +32,7 @@ async function deleteRecipe(recipe: Recipe) {
 }
 
 function mealLabel(recipe: Recipe): string {
-  const meal = capitalize(recipe.mealType)
-  return recipe.course ? `${meal} - ${capitalize(recipe.course)}` : meal
+  return capitalize(recipe.course)
 }
 
 function uploaderLabel(recipe: Recipe): string {

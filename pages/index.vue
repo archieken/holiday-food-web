@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { CourseSelection, Recipe } from '~~/shared/types/itinerary'
-import { capitalize, mealEntries, placeLabel, slotKey, toServings } from '~~/composables/useItineraryPlanner'
+import type { MealSlot, Recipe } from '~~/shared/types/itinerary'
+import { capitalize, mealEntries, placeLabel, slotKey, targetSlotsFor, toServings } from '~~/composables/useItineraryPlanner'
 
 useHead({ title: 'Tavira Recipe Maker' })
 
@@ -22,20 +22,6 @@ const {
   assignExtraToDay
 } = useItineraryPlanner()
 
-interface ServingsField {
-  label: string
-  value: number | null
-  set: (value: number | null) => void
-}
-
-function servingsFields(mealLabel: string, courses: CourseSelection): ServingsField[] {
-  return [
-    { label: `${mealLabel} - Starter`, value: courses.starter, set: (v) => { courses.starter = v } },
-    { label: `${mealLabel} - Main`, value: courses.main, set: (v) => { courses.main = v } },
-    { label: `${mealLabel} - Dessert`, value: courses.dessert, set: (v) => { courses.dessert = v } }
-  ]
-}
-
 // Which day an extra recipe's "Add to Day" selector is currently pointed at.
 const extraRecipeDay = ref<Record<string, number>>({})
 
@@ -47,6 +33,19 @@ function setDayForExtra(recipe: Recipe, day: number) {
   extraRecipeDay.value[recipe.id] = day
 }
 
+// Which meal slot an extra recipe's selector is pointed at - only meaningful for a
+// Main-course recipe, since it can go into either Lunch or Dinner.
+const extraRecipeSlot = ref<Record<string, MealSlot>>({})
+
+function slotForExtra(recipe: Recipe): MealSlot | null {
+  const options = targetSlotsFor(recipe)
+  if (options.length === 0) return null
+  return extraRecipeSlot.value[recipe.id] ?? options[0]
+}
+
+function setSlotForExtra(recipe: Recipe, slot: MealSlot) {
+  extraRecipeSlot.value[recipe.id] = slot
+}
 </script>
 
 <template>
@@ -55,7 +54,7 @@ function setDayForExtra(recipe: Recipe, day: number) {
 
     <header class="hero">
       <h1>Tavira Recipe Maker</h1>
-      <p>Pick how many days you're staying and how many people you're cooking for, then choose which meals and courses you want each day.</p>
+      <p>Pick how many days you're staying and how many people you're cooking for, then choose which meals you want each day.</p>
     </header>
 
     <form class="planner" @submit.prevent="generate">
@@ -70,7 +69,7 @@ function setDayForExtra(recipe: Recipe, day: number) {
           <input id="servings" v-model.number="tripServings" type="number" min="1" max="50" required>
         </div>
       </div>
-      <p class="servings-trip-hint">Sets breakfast and every main course below - override any meal individually if needed.</p>
+      <p class="servings-trip-hint">Sets Breakfast, Lunch and Dinner below - override any meal individually if needed.</p>
 
       <div class="day-selectors">
         <div v-for="(selection, index) in daySelections" :key="index" class="day-selector">
@@ -86,29 +85,32 @@ function setDayForExtra(recipe: Recipe, day: number) {
             >
           </label>
 
-          <div class="course-group">
-            <span class="course-group-label">Lunch</span>
-            <label v-for="field in servingsFields('Lunch', selection.lunch)" :key="field.label" class="servings-row">
-              <span>{{ field.label.split(' - ')[1] }}</span>
-              <input
-                type="number" min="1" max="50" placeholder="—" class="servings-input"
-                :value="field.value ?? ''"
-                @input="field.set(toServings(($event.target as HTMLInputElement).value))"
-              >
-            </label>
-          </div>
+          <label class="servings-row">
+            <span>Lunch</span>
+            <input
+              type="number" min="1" max="50" placeholder="—" class="servings-input"
+              :value="selection.lunch ?? ''"
+              @input="selection.lunch = toServings(($event.target as HTMLInputElement).value)"
+            >
+          </label>
 
-          <div class="course-group">
-            <span class="course-group-label">Dinner</span>
-            <label v-for="field in servingsFields('Dinner', selection.dinner)" :key="field.label" class="servings-row">
-              <span>{{ field.label.split(' - ')[1] }}</span>
-              <input
-                type="number" min="1" max="50" placeholder="—" class="servings-input"
-                :value="field.value ?? ''"
-                @input="field.set(toServings(($event.target as HTMLInputElement).value))"
-              >
-            </label>
-          </div>
+          <label class="servings-row">
+            <span>Dinner</span>
+            <input
+              type="number" min="1" max="50" placeholder="—" class="servings-input"
+              :value="selection.dinner ?? ''"
+              @input="selection.dinner = toServings(($event.target as HTMLInputElement).value)"
+            >
+          </label>
+
+          <label class="servings-row">
+            <span>Dessert</span>
+            <input
+              type="number" min="1" max="50" placeholder="—" class="servings-input"
+              :value="selection.dessert ?? ''"
+              @input="selection.dessert = toServings(($event.target as HTMLInputElement).value)"
+            >
+          </label>
         </div>
       </div>
 
@@ -136,14 +138,14 @@ function setDayForExtra(recipe: Recipe, day: number) {
               <div class="meal-actions">
                 <button
                   type="button" class="refresh-button"
-                  :disabled="refreshingSlot === slotKey(day.day, entry.meal, entry.course)"
+                  :disabled="refreshingSlot === slotKey(day.day, entry.slot)"
                   @click="refreshRecipe(day.day, entry)"
                 >
-                  {{ refreshingSlot === slotKey(day.day, entry.meal, entry.course) ? 'Refreshing…' : 'Try another' }}
+                  {{ refreshingSlot === slotKey(day.day, entry.slot) ? 'Refreshing…' : 'Try another' }}
                 </button>
                 <button
                   type="button" class="remove-button"
-                  :disabled="refreshingSlot === slotKey(day.day, entry.meal, entry.course)"
+                  :disabled="refreshingSlot === slotKey(day.day, entry.slot)"
                   @click="removeRecipe(day.day, entry)"
                 >
                   Remove
@@ -171,22 +173,34 @@ function setDayForExtra(recipe: Recipe, day: number) {
           <li v-for="recipe in itinerary.extras" :key="recipe.id" class="extra-item">
             <span>{{ recipe.name }} <span class="meal-meta">&middot; Serves {{ recipe.servings }}</span></span>
             <div class="extra-actions">
-              <label class="day-picker">
-                Day
-                <select
-                  :value="dayForExtra(recipe)"
-                  @change="setDayForExtra(recipe, Number(($event.target as HTMLSelectElement).value))"
+              <template v-if="targetSlotsFor(recipe).length > 0">
+                <label class="day-picker">
+                  Day
+                  <select
+                    :value="dayForExtra(recipe)"
+                    @change="setDayForExtra(recipe, Number(($event.target as HTMLSelectElement).value))"
+                  >
+                    <option v-for="(_, index) in daySelections" :key="index" :value="index + 1">{{ index + 1 }}</option>
+                  </select>
+                </label>
+                <label v-if="targetSlotsFor(recipe).length > 1" class="day-picker">
+                  Meal
+                  <select
+                    :value="slotForExtra(recipe)"
+                    @change="setSlotForExtra(recipe, ($event.target as HTMLSelectElement).value as MealSlot)"
+                  >
+                    <option v-for="slot in targetSlotsFor(recipe)" :key="slot" :value="slot">{{ capitalize(slot) }}</option>
+                  </select>
+                </label>
+                <button
+                  type="button" class="assign-button"
+                  :disabled="addingRecipeId === recipe.id"
+                  @click="assignExtraToDay(recipe, dayForExtra(recipe), slotForExtra(recipe)!)"
                 >
-                  <option v-for="(_, index) in daySelections" :key="index" :value="index + 1">{{ index + 1 }}</option>
-                </select>
-              </label>
-              <button
-                type="button" class="assign-button"
-                :disabled="addingRecipeId === recipe.id"
-                @click="assignExtraToDay(recipe, dayForExtra(recipe))"
-              >
-                {{ addingRecipeId === recipe.id ? 'Adding…' : `Add to Day ${dayForExtra(recipe)}` }}
-              </button>
+                  {{ addingRecipeId === recipe.id ? 'Adding…' : `Add to Day ${dayForExtra(recipe)}` }}
+                </button>
+              </template>
+              <span v-else class="meal-meta">Starters aren't scheduled into a day.</span>
               <button
                 type="button" class="remove-extra-button"
                 :disabled="addingRecipeId === recipe.id"
@@ -327,20 +341,6 @@ function setDayForExtra(recipe: Recipe, day: number) {
   border-radius: 6px;
   font-size: 0.85rem;
   text-align: center;
-}
-
-.course-group {
-  margin-top: 8px;
-  padding-left: 8px;
-  border-left: 2px solid var(--border);
-}
-
-.course-group-label {
-  display: block;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--portugal-green);
-  margin-bottom: 4px;
 }
 
 button[type='submit'] {

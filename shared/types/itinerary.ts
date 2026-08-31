@@ -11,8 +11,7 @@ export interface Recipe {
   country: string
   region: string | null
   location: string | null
-  mealType: 'BREAKFAST' | 'LUNCH' | 'DINNER'
-  course: 'STARTER' | 'MAIN' | 'DESSERT' | null
+  course: 'BREAKFAST' | 'STARTER' | 'MAIN' | 'DESSERT'
   difficulty: 'EASY' | 'MEDIUM' | 'HARD' | null
   prepTime: number
   cookTime: number
@@ -46,17 +45,15 @@ export interface CreateCommentRequest {
   text: string
 }
 
-export interface MealCourses {
-  starter: Recipe | null
-  main: Recipe | null
-  dessert: Recipe | null
-}
+/** Which of a day's four planned meals a recipe fills. */
+export type MealSlot = 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'DESSERT'
 
 export interface DayPlan {
   day: number
   breakfast: Recipe | null
-  lunch: MealCourses
-  dinner: MealCourses
+  lunch: Recipe | null
+  dinner: Recipe | null
+  dessert: Recipe | null
 }
 
 export interface ItineraryResponse {
@@ -74,17 +71,13 @@ export interface ExtraRecipeSelection {
   servings: number
 }
 
-/** Number of people to cook that course for, or null to skip it. */
-export interface CourseSelection {
-  starter: number | null
-  main: number | null
-  dessert: number | null
-}
-
+/** What a single day of the trip should include: how many people to cook each
+ * meal for, or null to skip it. */
 export interface MealSelection {
   breakfast: number | null
-  lunch: CourseSelection
-  dinner: CourseSelection
+  lunch: number | null
+  dinner: number | null
+  dessert: number | null
 }
 
 export interface ItineraryRequest {
@@ -96,15 +89,13 @@ export interface ItineraryRequest {
 
 export interface RefreshRecipeRequest extends ItineraryRequest {
   day: number
-  meal: 'BREAKFAST' | 'LUNCH' | 'DINNER'
-  course: 'STARTER' | 'MAIN' | 'DESSERT' | null
+  slot: MealSlot
   excludeRecipeId: string
 }
 
 export interface AddRecipeRequest extends ItineraryRequest {
   day: number
-  meal: 'BREAKFAST' | 'LUNCH' | 'DINNER'
-  course: 'STARTER' | 'MAIN' | 'DESSERT' | null
+  slot: MealSlot
   recipeId: string
 }
 
