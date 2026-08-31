@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { MealSlot, Recipe } from '~~/shared/types/itinerary'
-import { capitalize, COUNTRY, mealEntries, placeLabel, slotKey, targetSlotsFor, toServings } from '~~/composables/useItineraryPlanner'
+import { capitalize, COUNTRY, mealEntries, placeLabel, slotKey, targetSlotsFor } from '~~/composables/useItineraryPlanner'
 
 useHead({ title: 'Tavira Recipe Maker' })
 
@@ -97,50 +97,7 @@ function setSlotForExtra(recipe: Recipe, slot: MealSlot) {
           <input id="servings" v-model.number="tripServings" type="number" min="1" max="50" required>
         </div>
       </div>
-      <p class="servings-trip-hint">Sets Breakfast, Lunch and Dinner below - override any meal individually if needed.</p>
-
-      <div class="day-selectors">
-        <div v-for="(selection, index) in daySelections" :key="index" class="day-selector">
-          <h4>Day {{ index + 1 }}</h4>
-          <p class="servings-hint">Enter servings, or leave blank to skip</p>
-
-          <label class="servings-row">
-            <span>Breakfast</span>
-            <input
-              type="number" min="1" max="50" placeholder="—" class="servings-input"
-              :value="selection.breakfast ?? ''"
-              @input="selection.breakfast = toServings(($event.target as HTMLInputElement).value)"
-            >
-          </label>
-
-          <label class="servings-row">
-            <span>Lunch</span>
-            <input
-              type="number" min="1" max="50" placeholder="—" class="servings-input"
-              :value="selection.lunch ?? ''"
-              @input="selection.lunch = toServings(($event.target as HTMLInputElement).value)"
-            >
-          </label>
-
-          <label class="servings-row">
-            <span>Dinner</span>
-            <input
-              type="number" min="1" max="50" placeholder="—" class="servings-input"
-              :value="selection.dinner ?? ''"
-              @input="selection.dinner = toServings(($event.target as HTMLInputElement).value)"
-            >
-          </label>
-
-          <label class="servings-row">
-            <span>Dessert</span>
-            <input
-              type="number" min="1" max="50" placeholder="—" class="servings-input"
-              :value="selection.dessert ?? ''"
-              @input="selection.dessert = toServings(($event.target as HTMLInputElement).value)"
-            >
-          </label>
-        </div>
-      </div>
+      <p class="servings-trip-hint">Sets Breakfast, Lunch and Dinner for every day - you can adjust or remove individual meals once your itinerary is generated.</p>
 
       <button type="submit" :disabled="loading">
         {{ loading ? 'Generating…' : 'Generate itinerary' }}
@@ -343,50 +300,6 @@ function setSlotForExtra(recipe: Recipe, slot: MealSlot) {
 
 .field input[type='number'] {
   min-width: 90px;
-}
-
-.day-selectors {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.day-selector {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 12px;
-  background: var(--bg);
-}
-
-.day-selector h4 {
-  margin: 0 0 4px;
-  color: var(--portugal-red);
-  font-size: 0.9rem;
-}
-
-.servings-hint {
-  margin: 0 0 8px;
-  font-size: 0.72rem;
-  color: var(--muted);
-}
-
-.servings-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  font-size: 0.85rem;
-  margin-bottom: 4px;
-}
-
-.servings-input {
-  width: 48px;
-  padding: 2px 4px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font-size: 0.85rem;
-  text-align: center;
 }
 
 button[type='submit'] {
