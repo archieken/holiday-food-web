@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ItineraryResponse } from '~~/shared/types/itinerary'
+import type { ItineraryResponse, Recipe } from '~~/shared/types/itinerary'
 
 const { data: countries } = await useFetch<string[]>('/api/countries')
 
@@ -32,6 +32,15 @@ async function generate() {
   } finally {
     loading.value = false
   }
+}
+
+function placeLabel(recipe: Recipe): string | null {
+  if (recipe.location && recipe.region) return `${recipe.location}, ${recipe.region}`
+  return recipe.region ?? recipe.location
+}
+
+function capitalize(value: string): string {
+  return value.charAt(0) + value.slice(1).toLowerCase()
 }
 </script>
 
@@ -73,26 +82,24 @@ async function generate() {
       <div class="days">
         <article v-for="day in itinerary.itinerary" :key="day.day" class="day-card">
           <h3>Day {{ day.day }}</h3>
-          <div class="meal">
-            <h4>Breakfast: {{ day.breakfast.name }}</h4>
+          <div
+            v-for="meal in [
+              { label: 'Breakfast', recipe: day.breakfast },
+              { label: 'Lunch', recipe: day.lunch },
+              { label: 'Dinner', recipe: day.dinner }
+            ]"
+            :key="meal.label"
+            class="meal"
+          >
+            <h4>{{ meal.label }}: {{ meal.recipe.name }}</h4>
+            <p class="meal-meta">
+              <template v-if="placeLabel(meal.recipe)">{{ placeLabel(meal.recipe) }} &middot; </template>
+              <template v-if="meal.recipe.difficulty">{{ capitalize(meal.recipe.difficulty) }} &middot; </template>
+              Prep {{ meal.recipe.prepTime }}m / Cook {{ meal.recipe.cookTime }}m &middot; Serves {{ meal.recipe.servings }}
+            </p>
+            <p v-if="meal.recipe.localContext" class="meal-context">{{ meal.recipe.localContext }}</p>
             <ul>
-              <li v-for="ingredient in day.breakfast.ingredients" :key="ingredient.name">
-                {{ ingredient.quantity }} {{ ingredient.unit }} {{ ingredient.name }}
-              </li>
-            </ul>
-          </div>
-          <div class="meal">
-            <h4>Lunch: {{ day.lunch.name }}</h4>
-            <ul>
-              <li v-for="ingredient in day.lunch.ingredients" :key="ingredient.name">
-                {{ ingredient.quantity }} {{ ingredient.unit }} {{ ingredient.name }}
-              </li>
-            </ul>
-          </div>
-          <div class="meal">
-            <h4>Dinner: {{ day.dinner.name }}</h4>
-            <ul>
-              <li v-for="ingredient in day.dinner.ingredients" :key="ingredient.name">
+              <li v-for="ingredient in meal.recipe.ingredients" :key="ingredient.name">
                 {{ ingredient.quantity }} {{ ingredient.unit }} {{ ingredient.name }}
               </li>
             </ul>
@@ -273,7 +280,20 @@ button[type='submit']:disabled {
 .meal h4 {
   color: var(--portugal-green);
   font-size: 0.95rem;
-  margin: 0 0 6px;
+  margin: 0 0 4px;
+}
+
+.meal-meta {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin: 0 0 4px;
+}
+
+.meal-context {
+  font-size: 0.82rem;
+  font-style: italic;
+  color: var(--muted);
+  margin: 0 0 8px;
 }
 
 .meal ul,
