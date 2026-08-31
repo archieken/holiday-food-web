@@ -6,6 +6,7 @@ const { data: countries } = await useFetch<string[]>('/api/countries')
 const country = ref(countries.value?.[0] ?? '')
 const town = ref('')
 const days = ref(3)
+const tripServings = ref(2)
 
 const { data: towns } = await useFetch<string[]>('/api/towns', { query: { country } })
 
@@ -13,13 +14,11 @@ watch(towns, (available) => {
   if (town.value && !available?.includes(town.value)) town.value = ''
 })
 
-const DEFAULT_SERVINGS = 2
-
-function defaultSelection(): MealSelection {
+function defaultSelection(servings: number): MealSelection {
   return {
-    breakfast: DEFAULT_SERVINGS,
-    lunch: { starter: null, main: DEFAULT_SERVINGS, dessert: null },
-    dinner: { starter: null, main: DEFAULT_SERVINGS, dessert: null }
+    breakfast: servings,
+    lunch: { starter: null, main: servings, dessert: null },
+    dinner: { starter: null, main: servings, dessert: null }
   }
 }
 
@@ -44,7 +43,9 @@ function servingsFields(mealLabel: string, courses: CourseSelection): ServingsFi
   ]
 }
 
-const daySelections = ref<MealSelection[]>(Array.from({ length: days.value }, defaultSelection))
+const daySelections = ref<MealSelection[]>(
+  Array.from({ length: days.value }, () => defaultSelection(tripServings.value))
+)
 
 watch(days, (count) => {
   const clamped = Math.min(Math.max(Math.round(count) || 1, 1), 60)
@@ -55,9 +56,25 @@ watch(days, (count) => {
 
   const current = daySelections.value
   if (clamped > current.length) {
-    for (let i = current.length; i < clamped; i++) current.push(defaultSelection())
+    for (let i = current.length; i < clamped; i++) current.push(defaultSelection(tripServings.value))
   } else {
     current.length = clamped
+  }
+})
+
+// The trip-wide servings selector sets breakfast + every main course across all days;
+// starters/desserts are left alone since they default to (and usually stay) unselected.
+watch(tripServings, (count) => {
+  const clamped = Math.min(Math.max(Math.round(count) || 1, 1), 50)
+  if (clamped !== count) {
+    tripServings.value = clamped
+    return
+  }
+
+  for (const selection of daySelections.value) {
+    selection.breakfast = clamped
+    selection.lunch.main = clamped
+    selection.dinner.main = clamped
   }
 })
 
@@ -174,7 +191,13 @@ function capitalize(value: string): string {
           <label for="days">Days</label>
           <input id="days" v-model.number="days" type="number" min="1" max="60" required>
         </div>
+
+        <div class="field">
+          <label for="servings">Servings</label>
+          <input id="servings" v-model.number="tripServings" type="number" min="1" max="50" required>
+        </div>
       </div>
+      <p class="servings-trip-hint">Sets breakfast and every main course below - override any meal individually if needed.</p>
 
       <div class="day-selectors">
         <div v-for="(selection, index) in daySelections" :key="index" class="day-selector">
@@ -325,7 +348,13 @@ body {
   align-items: flex-end;
   gap: 16px;
   flex-wrap: wrap;
-  margin-bottom: 16px;
+  margin-bottom: 8px;
+}
+
+.servings-trip-hint {
+  margin: 0 0 16px;
+  font-size: 0.78rem;
+  color: var(--muted);
 }
 
 .field {
