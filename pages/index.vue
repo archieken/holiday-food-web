@@ -269,6 +269,7 @@ function setSlotForExtra(recipe: Recipe, slot: MealSlot) {
           <li v-for="ingredient in itinerary.shoppingList" :key="ingredient.name">
             {{ ingredient.quantity }} {{ ingredient.unit }} {{ ingredient.name }}
             <span v-if="ingredient.translatedName" class="ingredient-translation">({{ ingredient.translatedName }})</span>
+            <span v-if="ingredient.recipeNames.length" class="ingredient-source">{{ ingredient.recipeNames.join(', ') }}</span>
           </li>
         </ul>
       </div>
@@ -561,6 +562,12 @@ button[type='submit']:disabled {
 .ingredient-translation {
   color: var(--muted);
   font-style: italic;
+}
+
+.ingredient-source {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
 }
 
 .extras {

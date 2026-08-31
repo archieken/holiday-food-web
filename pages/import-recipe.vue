@@ -63,7 +63,7 @@ function startOver() {
 }
 
 function addIngredient() {
-  draft.value?.ingredients.push({ name: '', quantity: 0, unit: '', translatedName: null })
+  draft.value?.ingredients.push({ name: '', quantity: 0, unit: '', translatedName: null, recipeNames: [] })
 }
 
 function removeIngredient(index: number) {

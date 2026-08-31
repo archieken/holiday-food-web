@@ -113,6 +113,7 @@ onUnmounted(() => {
             <span class="item-text">
               {{ item.quantity }} {{ item.unit }} {{ item.name }}
               <span v-if="item.translatedName" class="ingredient-translation">({{ item.translatedName }})</span>
+              <span v-if="item.recipeNames.length" class="ingredient-source">{{ item.recipeNames.join(', ') }}</span>
             </span>
           </label>
         </li>
@@ -220,6 +221,12 @@ label.checked .item-text {
 .ingredient-translation {
   color: var(--muted);
   font-style: italic;
+}
+
+.ingredient-source {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
 }
 
 .back-link {

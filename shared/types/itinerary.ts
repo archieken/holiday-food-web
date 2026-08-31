@@ -3,6 +3,8 @@ export interface Ingredient {
   quantity: number
   unit: string
   translatedName: string | null
+  /** Recipe(s) this quantity was combined from - empty on a recipe's own ingredient list. */
+  recipeNames: string[]
 }
 
 export interface Recipe {

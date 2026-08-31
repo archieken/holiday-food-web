@@ -7,6 +7,8 @@ export interface ShoppingListItem {
   unit: string
   translatedName: string | null
   checked: boolean
+  /** Recipe(s) this quantity was combined from. */
+  recipeNames: string[]
 }
 
 export interface ShoppingList {
