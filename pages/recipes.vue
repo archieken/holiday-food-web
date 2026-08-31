@@ -28,6 +28,33 @@ function mealLabel(recipe: Recipe): string {
 async function handleAdd(recipe: Recipe) {
   await addRecipe(dayFor(recipe), recipe.mealType, recipe.course, recipe)
 }
+
+const printingRecipeId = ref<string | null>(null)
+
+async function printRecipe(recipe: Recipe) {
+  // Open the tab synchronously, inside the click's user gesture, so the
+  // browser doesn't treat it as a popup once we redirect it after the
+  // (async) PDF fetch below resolves.
+  const pdfWindow = window.open('', '_blank')
+
+  printingRecipeId.value = recipe.id
+  errorMessage.value = ''
+
+  try {
+    const blob = await $fetch<Blob>(`/api/recipes/${recipe.id}/pdf`, { responseType: 'blob' })
+    const url = URL.createObjectURL(blob)
+    if (pdfWindow) {
+      pdfWindow.location.href = url
+    } else {
+      window.location.href = url
+    }
+  } catch (error: any) {
+    pdfWindow?.close()
+    errorMessage.value = error.data?.message ?? error.statusMessage ?? 'Something went wrong generating the recipe PDF.'
+  } finally {
+    printingRecipeId.value = null
+  }
+}
 </script>
 
 <template>
@@ -66,6 +93,12 @@ async function handleAdd(recipe: Recipe) {
             <li v-for="(step, index) in recipe.instructions" :key="index">{{ step }}</li>
           </ol>
         </details>
+
+        <div class="print-row">
+          <button type="button" class="print-button" :disabled="printingRecipeId === recipe.id" @click="printRecipe(recipe)">
+            {{ printingRecipeId === recipe.id ? 'Preparing…' : 'Print recipe' }}
+          </button>
+        </div>
 
         <div class="add-row">
           <label>
@@ -182,8 +215,33 @@ async function handleAdd(recipe: Recipe) {
   font-style: italic;
 }
 
-.add-row {
+.print-row {
   margin-top: auto;
+  padding-top: 8px;
+}
+
+.print-button {
+  width: 100%;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--portugal-green);
+  cursor: pointer;
+}
+
+.print-button:hover:not(:disabled) {
+  background: var(--bg);
+}
+
+.print-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.add-row {
   display: flex;
   align-items: center;
   gap: 8px;
