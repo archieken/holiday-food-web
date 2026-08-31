@@ -114,6 +114,9 @@ function setSlotForExtra(recipe: Recipe, slot: MealSlot) {
     <section v-if="itinerary" class="results">
       <div class="results-header">
         <h2>{{ itinerary.days }}-day trip</h2>
+        <button type="button" class="pdf-button" :disabled="shoppingListLoading" @click="openShoppingList">
+          {{ shoppingListLoading ? 'Preparing…' : 'Open shopping list' }}
+        </button>
       </div>
 
       <div class="days">
@@ -231,21 +234,6 @@ function setSlotForExtra(recipe: Recipe, slot: MealSlot) {
         </ul>
       </div>
 
-      <div class="shopping-list">
-        <div class="shopping-list-header">
-          <h3>Shopping list</h3>
-          <button type="button" class="pdf-button" :disabled="shoppingListLoading" @click="openShoppingList">
-            {{ shoppingListLoading ? 'Preparing…' : 'Open shareable list' }}
-          </button>
-        </div>
-        <ul>
-          <li v-for="ingredient in itinerary.shoppingList" :key="ingredient.name">
-            {{ ingredient.quantity }} {{ ingredient.unit }} {{ ingredient.name }}
-            <span v-if="ingredient.translatedName" class="ingredient-translation">({{ ingredient.translatedName }})</span>
-            <span v-if="ingredient.recipeNames.length" class="ingredient-source">{{ ingredient.recipeNames.join(', ') }}</span>
-          </li>
-        </ul>
-      </div>
     </section>
   </div>
 </template>
@@ -490,28 +478,15 @@ button[type='submit']:disabled {
   margin: 0 0 8px;
 }
 
-.meal ul,
-.shopping-list ul {
+.meal ul {
   margin: 0;
   padding-left: 18px;
   color: var(--ink);
 }
 
-.meal li,
-.shopping-list li {
+.meal li {
   font-size: 0.9rem;
   margin-bottom: 2px;
-}
-
-.ingredient-translation {
-  color: var(--muted);
-  font-style: italic;
-}
-
-.ingredient-source {
-  display: block;
-  color: var(--muted);
-  font-size: 0.78rem;
 }
 
 .extras {
@@ -664,37 +639,5 @@ button[type='submit']:disabled {
 .remove-extra-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
-}
-
-.shopping-list {
-  margin-top: 24px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 20px;
-}
-
-.shopping-list-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  margin-bottom: 12px;
-}
-
-.shopping-list-header h3 {
-  color: var(--portugal-red);
-  margin: 0;
-}
-
-.shopping-list ul {
-  columns: 2;
-}
-
-@media (max-width: 480px) {
-  .shopping-list ul {
-    columns: 1;
-  }
 }
 </style>
