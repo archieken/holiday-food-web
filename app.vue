@@ -25,6 +25,7 @@ onMounted(async () => {
         <GoogleSignInButton v-else />
       </div>
     </nav>
+    <div class="azulejo-banner" aria-hidden="true" />
     <p v-if="authError" class="auth-error">{{ authError }}</p>
 
     <NuxtPage />
@@ -40,6 +41,8 @@ onMounted(async () => {
   --border: #e2e5e8;
   --surface: #ffffff;
   --bg: #f7f7f5;
+  --azulejo-blue: #1b5e82;
+  --azulejo-bg: #eaf2f6;
 }
 
 * {
@@ -61,6 +64,16 @@ body {
   flex-wrap: wrap;
   padding: 12px 20px;
   background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+/* A thin strip of Portuguese "azulejo" tile pattern under the nav, on every page. */
+.azulejo-banner {
+  height: 18px;
+  background-color: var(--azulejo-bg);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='18'%3E%3Cpath d='M12 1 L22 9 L12 17 L2 9 Z' fill='none' stroke='%231b5e82' stroke-width='1.3'/%3E%3Ccircle cx='12' cy='9' r='2' fill='%231b5e82'/%3E%3C/svg%3E");
+  background-repeat: repeat-x;
+  background-size: 24px 18px;
   border-bottom: 1px solid var(--border);
 }
 
