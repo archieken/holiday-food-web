@@ -19,6 +19,7 @@ export interface Recipe {
   servings: number
   localContext: string | null
   ingredients: Ingredient[]
+  instructions: string[]
 }
 
 export interface MealCourses {
