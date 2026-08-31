@@ -69,7 +69,6 @@ export function useItineraryPlanner() {
 
   const itinerary = useState<ItineraryResponse | null>('planner-itinerary', () => null)
   const loading = useState('planner-loading', () => false)
-  const pdfLoading = useState('planner-pdf-loading', () => false)
   const shoppingListLoading = useState('planner-shopping-list-loading', () => false)
   const errorMessage = useState('planner-error', () => '')
   const refreshingSlot = useState<string | null>('planner-refreshing-slot', () => null)
@@ -123,35 +122,6 @@ export function useItineraryPlanner() {
     }
   }
 
-  async function openPdf() {
-    // Open the tab synchronously, inside the click's user gesture, so the
-    // browser doesn't treat it as a popup once we redirect it after the
-    // (async) PDF fetch below resolves.
-    const pdfWindow = window.open('', '_blank')
-
-    pdfLoading.value = true
-    errorMessage.value = ''
-
-    try {
-      const blob = await $fetch<Blob>('/api/itinerary/pdf', {
-        method: 'POST',
-        body: { country: COUNTRY, days: daySelections.value, extraRecipes: extraRecipes.value },
-        responseType: 'blob'
-      })
-      const url = URL.createObjectURL(blob)
-      if (pdfWindow) {
-        pdfWindow.location.href = url
-      } else {
-        window.location.href = url
-      }
-    } catch (error: any) {
-      pdfWindow?.close()
-      errorMessage.value = error.data?.message ?? error.statusMessage ?? 'Something went wrong generating the PDF.'
-    } finally {
-      pdfLoading.value = false
-    }
-  }
-
   /** Saves the current shopping list under its own id and navigates to its shareable page. */
   async function openShoppingList() {
     if (!itinerary.value) return
@@ -200,6 +170,27 @@ export function useItineraryPlanner() {
     }
   }
 
+  /** Clears a single (day, meal, course) slot, dropping that recipe out of the trip entirely. */
+  async function removeRecipe(dayNumber: number, entry: MealEntry) {
+    const key = slotKey(dayNumber, entry.meal, entry.course)
+    refreshingSlot.value = key
+    errorMessage.value = ''
+
+    const selection = daySelections.value[dayNumber - 1]
+    if (selection) setSelectionValue(selection, entry.meal, entry.course, null)
+
+    try {
+      itinerary.value = await $fetch<ItineraryResponse>('/api/itinerary', {
+        method: 'POST',
+        body: { country: COUNTRY, days: daySelections.value, extraRecipes: extraRecipes.value }
+      })
+    } catch (error: any) {
+      errorMessage.value = error.data?.message ?? error.statusMessage ?? 'Something went wrong removing that recipe.'
+    } finally {
+      refreshingSlot.value = null
+    }
+  }
+
   /** Which selection field on a MealSelection a given (meal, course) slot corresponds to. */
   function selectionValue(selection: MealSelection, meal: Meal, course: CourseName | null): number | null {
     if (meal === 'BREAKFAST') return selection.breakfast
@@ -209,7 +200,7 @@ export function useItineraryPlanner() {
     return courses.dessert
   }
 
-  function setSelectionValue(selection: MealSelection, meal: Meal, course: CourseName | null, value: number) {
+  function setSelectionValue(selection: MealSelection, meal: Meal, course: CourseName | null, value: number | null) {
     if (meal === 'BREAKFAST') {
       selection.breakfast = value
       return
@@ -298,6 +289,16 @@ export function useItineraryPlanner() {
     }
   }
 
+  /**
+   * Moves a recipe out of "extras" and into a specific day, using its own fixed meal and
+   * course - the only way a recipe can be assigned to a day, since Explore Recipes only
+   * offers "Add without a day".
+   */
+  async function assignExtraToDay(recipe: Recipe, dayNumber: number) {
+    extraRecipes.value = extraRecipes.value.filter((extra) => extra.recipeId !== recipe.id)
+    await addRecipe(dayNumber, recipe.mealType, recipe.course, recipe)
+  }
+
   return {
     days,
     tripServings,
@@ -305,17 +306,16 @@ export function useItineraryPlanner() {
     extraRecipes,
     itinerary,
     loading,
-    pdfLoading,
     shoppingListLoading,
     errorMessage,
     refreshingSlot,
     addingRecipeId,
     generate,
-    openPdf,
     openShoppingList,
     refreshRecipe,
-    addRecipe,
+    removeRecipe,
     addExtraRecipe,
-    removeExtraRecipe
+    removeExtraRecipe,
+    assignExtraToDay
   }
 }

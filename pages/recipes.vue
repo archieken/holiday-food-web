@@ -4,29 +4,15 @@ import { capitalize, COUNTRY, placeLabel } from '~~/composables/useItineraryPlan
 
 useHead({ title: 'Explore Recipes - Tavira Recipe Maker' })
 
-const { daySelections, addingRecipeId, errorMessage, addRecipe, addExtraRecipe } = useItineraryPlanner()
+const { addingRecipeId, errorMessage, addExtraRecipe } = useItineraryPlanner()
 
 const { data: recipes, pending, error } = await useFetch<Recipe[]>('/api/recipes', {
   query: { country: COUNTRY }
 })
 
-const selectedDay = ref<Record<string, number>>({})
-
-function dayFor(recipe: Recipe): number {
-  return selectedDay.value[recipe.id] ?? 1
-}
-
-function setDayFor(recipe: Recipe, day: number) {
-  selectedDay.value[recipe.id] = day
-}
-
 function mealLabel(recipe: Recipe): string {
   const meal = capitalize(recipe.mealType)
   return recipe.course ? `${meal} - ${capitalize(recipe.course)}` : meal
-}
-
-async function handleAdd(recipe: Recipe) {
-  await addRecipe(dayFor(recipe), recipe.mealType, recipe.course, recipe)
 }
 
 // Not every recipe necessarily has a photo - hide the image area for any that 404 rather
@@ -110,18 +96,6 @@ async function printRecipe(recipe: Recipe) {
         <div class="print-row">
           <button type="button" class="print-button" :disabled="printingRecipeId === recipe.id" @click="printRecipe(recipe)">
             {{ printingRecipeId === recipe.id ? 'Preparing…' : 'Print recipe' }}
-          </button>
-        </div>
-
-        <div class="add-row">
-          <label>
-            Day
-            <select :value="dayFor(recipe)" @change="setDayFor(recipe, Number(($event.target as HTMLSelectElement).value))">
-              <option v-for="(_, index) in daySelections" :key="index" :value="index + 1">{{ index + 1 }}</option>
-            </select>
-          </label>
-          <button type="button" class="add-button" :disabled="addingRecipeId === recipe.id" @click="handleAdd(recipe)">
-            {{ addingRecipeId === recipe.id ? 'Adding…' : `Add to Day ${dayFor(recipe)}` }}
           </button>
         </div>
 
@@ -271,46 +245,6 @@ async function printRecipe(recipe: Recipe) {
 }
 
 .print-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.add-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
-}
-
-.add-row label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.85rem;
-  color: var(--muted);
-}
-
-.add-row select {
-  padding: 4px 6px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font-size: 0.85rem;
-}
-
-.add-button {
-  margin-left: auto;
-  background: var(--portugal-green);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  padding: 6px 14px;
-  font-weight: 600;
-  font-size: 0.85rem;
-  cursor: pointer;
-}
-
-.add-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }

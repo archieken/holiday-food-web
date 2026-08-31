@@ -10,17 +10,17 @@ const {
   daySelections,
   itinerary,
   loading,
-  pdfLoading,
   shoppingListLoading,
   errorMessage,
   refreshingSlot,
   addingRecipeId,
   generate,
-  openPdf,
   openShoppingList,
   refreshRecipe,
+  removeRecipe,
   addExtraRecipe,
-  removeExtraRecipe
+  removeExtraRecipe,
+  assignExtraToDay
 } = useItineraryPlanner()
 
 interface ServingsField {
@@ -35,6 +35,17 @@ function servingsFields(mealLabel: string, courses: CourseSelection): ServingsFi
     { label: `${mealLabel} - Main`, value: courses.main, set: (v) => { courses.main = v } },
     { label: `${mealLabel} - Dessert`, value: courses.dessert, set: (v) => { courses.dessert = v } }
   ]
+}
+
+// Which day an extra recipe's "Add to Day" selector is currently pointed at.
+const extraRecipeDay = ref<Record<string, number>>({})
+
+function dayForExtra(recipe: Recipe): number {
+  return extraRecipeDay.value[recipe.id] ?? 1
+}
+
+function setDayForExtra(recipe: Recipe, day: number) {
+  extraRecipeDay.value[recipe.id] = day
 }
 
 // A recipe PDF's QR code links here as /?addRecipe=<id>, so scanning it drops the recipe
@@ -130,9 +141,6 @@ onMounted(async () => {
     <section v-if="itinerary" class="results">
       <div class="results-header">
         <h2>{{ itinerary.days }}-day trip</h2>
-        <button type="button" class="pdf-button" :disabled="pdfLoading" @click="openPdf">
-          {{ pdfLoading ? 'Preparing PDF…' : 'View / print PDF' }}
-        </button>
       </div>
 
       <div class="days">
@@ -144,13 +152,22 @@ onMounted(async () => {
           <div v-for="entry in mealEntries(day)" :key="entry.label" class="meal">
             <div class="meal-heading-row">
               <h4>{{ entry.label }}: {{ entry.recipe.name }}</h4>
-              <button
-                type="button" class="refresh-button"
-                :disabled="refreshingSlot === slotKey(day.day, entry.meal, entry.course)"
-                @click="refreshRecipe(day.day, entry)"
-              >
-                {{ refreshingSlot === slotKey(day.day, entry.meal, entry.course) ? 'Refreshing…' : 'Try another' }}
-              </button>
+              <div class="meal-actions">
+                <button
+                  type="button" class="refresh-button"
+                  :disabled="refreshingSlot === slotKey(day.day, entry.meal, entry.course)"
+                  @click="refreshRecipe(day.day, entry)"
+                >
+                  {{ refreshingSlot === slotKey(day.day, entry.meal, entry.course) ? 'Refreshing…' : 'Try another' }}
+                </button>
+                <button
+                  type="button" class="remove-button"
+                  :disabled="refreshingSlot === slotKey(day.day, entry.meal, entry.course)"
+                  @click="removeRecipe(day.day, entry)"
+                >
+                  Remove
+                </button>
+              </div>
             </div>
             <p class="meal-meta">
               <template v-if="placeLabel(entry.recipe)">{{ placeLabel(entry.recipe) }} &middot; </template>
@@ -172,13 +189,31 @@ onMounted(async () => {
         <ul>
           <li v-for="recipe in itinerary.extras" :key="recipe.id" class="extra-item">
             <span>{{ recipe.name }} <span class="meal-meta">&middot; Serves {{ recipe.servings }}</span></span>
-            <button
-              type="button" class="remove-extra-button"
-              :disabled="addingRecipeId === recipe.id"
-              @click="removeExtraRecipe(recipe.id)"
-            >
-              Remove
-            </button>
+            <div class="extra-actions">
+              <label class="day-picker">
+                Day
+                <select
+                  :value="dayForExtra(recipe)"
+                  @change="setDayForExtra(recipe, Number(($event.target as HTMLSelectElement).value))"
+                >
+                  <option v-for="(_, index) in daySelections" :key="index" :value="index + 1">{{ index + 1 }}</option>
+                </select>
+              </label>
+              <button
+                type="button" class="assign-button"
+                :disabled="addingRecipeId === recipe.id"
+                @click="assignExtraToDay(recipe, dayForExtra(recipe))"
+              >
+                {{ addingRecipeId === recipe.id ? 'Adding…' : `Add to Day ${dayForExtra(recipe)}` }}
+              </button>
+              <button
+                type="button" class="remove-extra-button"
+                :disabled="addingRecipeId === recipe.id"
+                @click="removeExtraRecipe(recipe.id)"
+              >
+                Remove
+              </button>
+            </div>
           </li>
         </ul>
       </div>
@@ -425,6 +460,32 @@ button[type='submit']:disabled {
   margin: 0 0 4px;
 }
 
+.meal-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 6px;
+}
+
+.remove-button {
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 0.7rem;
+  color: var(--portugal-red);
+  cursor: pointer;
+}
+
+.remove-button:hover:not(:disabled) {
+  background: var(--bg);
+}
+
+.remove-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .refresh-button {
   flex-shrink: 0;
   background: none;
@@ -505,6 +566,7 @@ button[type='submit']:disabled {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
   padding: 8px 0;
   border-bottom: 1px solid var(--border);
@@ -513,6 +575,44 @@ button[type='submit']:disabled {
 
 .extra-item:last-child {
   border-bottom: none;
+}
+
+.extra-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.day-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.day-picker select {
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.assign-button {
+  background: var(--portugal-green);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.assign-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .remove-extra-button {
