@@ -1,19 +1,20 @@
+import type { ItineraryRequest } from '~~/shared/types/itinerary'
+
 export default defineEventHandler(async (event) => {
   const { apiBase } = useRuntimeConfig()
-  const query = getQuery(event)
+  const body = await readBody<ItineraryRequest>(event)
 
-  const url = new URL('/api/itinerary/pdf', apiBase)
-  for (const [key, value] of Object.entries(query)) {
-    if (value !== undefined) url.searchParams.set(key, String(value))
-  }
-
-  const response = await fetch(url)
+  const response = await fetch(new URL('/api/itinerary/pdf', apiBase), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  })
 
   if (!response.ok) {
-    const body = await response.text()
+    const responseBody = await response.text()
     let message = 'Failed to reach holiday-food-api'
     try {
-      message = JSON.parse(body).message ?? message
+      message = JSON.parse(responseBody).message ?? message
     } catch {
       // backend returned a non-JSON error body, fall back to the default message
     }
