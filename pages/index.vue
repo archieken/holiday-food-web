@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import type { MealSlot, Recipe } from '~~/shared/types/itinerary'
-import { capitalize, mealEntries, placeLabel, slotKey, targetSlotsFor, toServings } from '~~/composables/useItineraryPlanner'
+import { capitalize, COUNTRY, mealEntries, placeLabel, slotKey, targetSlotsFor, toServings } from '~~/composables/useItineraryPlanner'
 
 useHead({ title: 'Tavira Recipe Maker' })
+
+const { authHeaders } = useAuth()
 
 const {
   days,
   tripServings,
   daySelections,
+  extraRecipes,
   itinerary,
   loading,
   shoppingListLoading,
@@ -18,9 +21,34 @@ const {
   openShoppingList,
   refreshRecipe,
   removeRecipe,
+  addExtraRecipe,
   removeExtraRecipe,
   assignExtraToDay
 } = useItineraryPlanner()
+
+// Catalogue used to power the "add a recipe" autofill in the extras section - fetched once,
+// filtered client-side as the user types.
+const { data: allRecipes } = await useFetch<Recipe[]>('/api/recipes', {
+  query: { country: COUNTRY },
+  headers: authHeaders()
+})
+
+const extraSearchQuery = ref('')
+
+const extraSearchResults = computed(() => {
+  const query = extraSearchQuery.value.trim().toLowerCase()
+  if (!query) return []
+
+  const alreadyExtra = new Set(extraRecipes.value.map((extra) => extra.recipeId))
+  return (allRecipes.value ?? [])
+    .filter((recipe) => recipe.name.toLowerCase().includes(query) && !alreadyExtra.has(recipe.id))
+    .slice(0, 8)
+})
+
+function pickExtraSearchResult(recipe: Recipe) {
+  addExtraRecipe(recipe)
+  extraSearchQuery.value = ''
+}
 
 // Which day an extra recipe's "Add to Day" selector is currently pointed at.
 const extraRecipeDay = ref<Record<string, number>>({})
@@ -167,9 +195,26 @@ function setSlotForExtra(recipe: Recipe, slot: MealSlot) {
         </article>
       </div>
 
-      <div v-if="itinerary.extras?.length" class="extras">
+      <div class="extras">
         <h3>Extra recipes <span class="extras-hint">(added without a day)</span></h3>
-        <ul>
+
+        <div class="extra-search">
+          <input
+            v-model="extraSearchQuery" type="text" placeholder="Add a recipe by name…"
+            class="extra-search-input"
+          >
+          <ul v-if="extraSearchResults.length" class="extra-search-results">
+            <li v-for="recipe in extraSearchResults" :key="recipe.id">
+              <button type="button" class="extra-search-result" @click="pickExtraSearchResult(recipe)">
+                {{ recipe.name }}
+              </button>
+            </li>
+          </ul>
+          <p v-else-if="extraSearchQuery.trim()" class="empty-hint">No recipes match "{{ extraSearchQuery }}".</p>
+        </div>
+
+        <p v-if="itinerary.extras.length === 0" class="meal-context">No extra recipes yet - search above to add one.</p>
+        <ul v-else>
           <li v-for="recipe in itinerary.extras" :key="recipe.id" class="extra-item">
             <span>{{ recipe.name }} <span class="meal-meta">&middot; Serves {{ recipe.servings }}</span></span>
             <div class="extra-actions">
@@ -535,6 +580,60 @@ button[type='submit']:disabled {
   color: var(--muted);
   font-weight: 400;
   font-size: 0.8rem;
+}
+
+.extra-search {
+  position: relative;
+  margin-bottom: 16px;
+}
+
+.extra-search-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.extra-search-results {
+  position: absolute;
+  z-index: 1;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin: 4px 0 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.extra-search-result {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 0.85rem;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.extra-search-result:hover {
+  background: var(--bg);
+}
+
+.empty-hint {
+  font-size: 0.82rem;
+  color: var(--muted);
+  font-style: italic;
+  margin: 0;
 }
 
 .extras ul {
