@@ -68,3 +68,10 @@ export interface RefreshRecipeRequest extends ItineraryRequest {
   course: 'STARTER' | 'MAIN' | 'DESSERT' | null
   excludeRecipeId: string
 }
+
+export interface AddRecipeRequest extends ItineraryRequest {
+  day: number
+  meal: 'BREAKFAST' | 'LUNCH' | 'DINNER'
+  course: 'STARTER' | 'MAIN' | 'DESSERT' | null
+  recipeId: string
+}
