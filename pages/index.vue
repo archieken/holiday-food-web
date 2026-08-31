@@ -94,7 +94,11 @@ function setSlotForExtra(recipe: Recipe, slot: MealSlot) {
 
         <div class="field">
           <label for="servings">Servings</label>
-          <input id="servings" v-model.number="tripServings" type="number" min="1" max="50" required>
+          <select id="servings" v-model.number="tripServings" required>
+            <option :value="2">2</option>
+            <option :value="4">4</option>
+            <option :value="6">6</option>
+          </select>
         </div>
       </div>
       <p class="servings-trip-hint">Sets Breakfast, Lunch and Dinner for every day - you can adjust or remove individual meals once your itinerary is generated.</p>
@@ -290,7 +294,8 @@ function setSlotForExtra(recipe: Recipe, slot: MealSlot) {
   color: var(--muted);
 }
 
-.field input {
+.field input,
+.field select {
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -298,7 +303,8 @@ function setSlotForExtra(recipe: Recipe, slot: MealSlot) {
   min-width: 160px;
 }
 
-.field input[type='number'] {
+.field input[type='number'],
+.field select {
   min-width: 90px;
 }
 

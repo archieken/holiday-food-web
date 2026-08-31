@@ -5,13 +5,16 @@ export interface AuthUser {
   admin: boolean
 }
 
+// Holds either a Google id token or a local email/password account's session token - the
+// API tells them apart on its side, so the frontend just treats it as an opaque bearer token.
 const STORAGE_KEY = 'googleIdToken'
 
 /**
- * Google sign-in state, lifted out of any single component via useState() so the nav bar
- * and every page agree on who's signed in. The id token is the only thing that matters for
- * authorization - it's re-verified by the API on every admin request - `user` here is just
- * for display and for showing/hiding admin-only buttons.
+ * Sign-in state (Google or a local email/password account), lifted out of any single
+ * component via useState() so the nav bar and every page agree on who's signed in. The
+ * token is the only thing that matters for authorization - it's re-verified by the API on
+ * every admin request - `user` here is just for display and for showing/hiding admin-only
+ * buttons.
  */
 export function useAuth() {
   const idToken = useState<string | null>('auth-id-token', () => null)
@@ -41,12 +44,32 @@ export function useAuth() {
     }
   }
 
-  /** The callback Google's Sign-In button invokes with a fresh id token. */
-  async function handleCredentialResponse(response: { credential: string }) {
-    idToken.value = response.credential
-    if (typeof window !== 'undefined') localStorage.setItem(STORAGE_KEY, response.credential)
+  async function signIn(token: string) {
+    idToken.value = token
+    if (typeof window !== 'undefined') localStorage.setItem(STORAGE_KEY, token)
     authError.value = ''
     await refreshUser()
+  }
+
+  /** The callback Google's Sign-In button invokes with a fresh id token. */
+  async function handleCredentialResponse(response: { credential: string }) {
+    await signIn(response.credential)
+  }
+
+  async function registerWithEmail(email: string, password: string, name: string) {
+    const { token } = await $fetch<{ token: string }>('/api/auth/register', {
+      method: 'POST',
+      body: { email, password, name }
+    })
+    await signIn(token)
+  }
+
+  async function loginWithEmail(email: string, password: string) {
+    const { token } = await $fetch<{ token: string }>('/api/auth/login', {
+      method: 'POST',
+      body: { email, password }
+    })
+    await signIn(token)
   }
 
   function signOut() {
@@ -60,5 +83,16 @@ export function useAuth() {
     return idToken.value ? { Authorization: `Bearer ${idToken.value}` } : {}
   }
 
-  return { idToken, user, authError, restoreFromStorage, refreshUser, handleCredentialResponse, signOut, authHeaders }
+  return {
+    idToken,
+    user,
+    authError,
+    restoreFromStorage,
+    refreshUser,
+    handleCredentialResponse,
+    registerWithEmail,
+    loginWithEmail,
+    signOut,
+    authHeaders
+  }
 }

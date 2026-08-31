@@ -22,7 +22,10 @@ onMounted(async () => {
           <span class="account-name">{{ user.name ?? user.email }}<span v-if="user.admin" class="admin-badge">Admin</span></span>
           <button type="button" class="sign-out-button" @click="signOut">Sign out</button>
         </template>
-        <GoogleSignInButton v-else />
+        <template v-else>
+          <GoogleSignInButton />
+          <EmailAuthForm />
+        </template>
       </div>
     </nav>
     <div class="azulejo-banner" aria-hidden="true" />
