@@ -36,9 +36,14 @@ onMounted(async () => {
 </template>
 
 <style>
+/* Built around the azulejo tile blue rather than the flag's red/green, so the accent
+   colors used everywhere (headings, buttons, links) sit comfortably next to the tile
+   banner instead of competing with it: a warm terracotta (rooftops, cork, azulejo
+   border details) for primary actions, and a teal-leaning green - adjacent to the blue
+   rather than a straight complementary clash - for secondary ones. */
 :root {
-  --portugal-red: #da291c;
-  --portugal-green: #046a38;
+  --portugal-red: #b8502a;
+  --portugal-green: #2f7d6e;
   --ink: #1f2328;
   --muted: #5b6570;
   --border: #e2e5e8;
