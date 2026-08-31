@@ -5,10 +5,29 @@ import { capitalize, COUNTRY, placeLabel } from '~~/composables/useItineraryPlan
 useHead({ title: 'Explore Recipes - Tavira Recipe Maker' })
 
 const { addingRecipeId, errorMessage, addExtraRecipe } = useItineraryPlanner()
+const { user, authHeaders } = useAuth()
 
 const { data: recipes, pending, error } = await useFetch<Recipe[]>('/api/recipes', {
   query: { country: COUNTRY }
 })
+
+const deletingRecipeId = ref<string | null>(null)
+
+async function deleteRecipe(recipe: Recipe) {
+  if (!confirm(`Delete "${recipe.name}"? This can't be undone.`)) return
+
+  deletingRecipeId.value = recipe.id
+  errorMessage.value = ''
+
+  try {
+    await $fetch(`/api/recipes/${recipe.id}`, { method: 'DELETE', headers: authHeaders() })
+    recipes.value = recipes.value?.filter((r) => r.id !== recipe.id) ?? null
+  } catch (error: any) {
+    errorMessage.value = error.data?.message ?? error.statusMessage ?? 'Something went wrong deleting that recipe.'
+  } finally {
+    deletingRecipeId.value = null
+  }
+}
 
 function mealLabel(recipe: Recipe): string {
   const meal = capitalize(recipe.mealType)
@@ -105,6 +124,15 @@ async function printRecipe(recipe: Recipe) {
           @click="addExtraRecipe(recipe)"
         >
           {{ addingRecipeId === recipe.id ? 'Adding…' : 'Add without a day' }}
+        </button>
+
+        <button
+          v-if="user?.admin"
+          type="button" class="delete-button"
+          :disabled="deletingRecipeId === recipe.id"
+          @click="deleteRecipe(recipe)"
+        >
+          {{ deletingRecipeId === recipe.id ? 'Deleting…' : 'Delete recipe' }}
         </button>
       </article>
     </div>
@@ -268,6 +296,28 @@ async function printRecipe(recipe: Recipe) {
 }
 
 .add-extra-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.delete-button {
+  width: 100%;
+  margin-top: 8px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: var(--portugal-red);
+  cursor: pointer;
+}
+
+.delete-button:hover:not(:disabled) {
+  background: var(--bg);
+}
+
+.delete-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
