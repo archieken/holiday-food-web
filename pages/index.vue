@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CourseSelection } from '~~/shared/types/itinerary'
+import type { CourseSelection, Recipe } from '~~/shared/types/itinerary'
 import { capitalize, mealEntries, placeLabel, slotKey, toServings } from '~~/composables/useItineraryPlanner'
 
 useHead({ title: 'Tavira Recipe Maker' })
@@ -14,10 +14,13 @@ const {
   shoppingListLoading,
   errorMessage,
   refreshingSlot,
+  addingRecipeId,
   generate,
   openPdf,
   openShoppingList,
-  refreshRecipe
+  refreshRecipe,
+  addExtraRecipe,
+  removeExtraRecipe
 } = useItineraryPlanner()
 
 interface ServingsField {
@@ -33,6 +36,25 @@ function servingsFields(mealLabel: string, courses: CourseSelection): ServingsFi
     { label: `${mealLabel} - Dessert`, value: courses.dessert, set: (v) => { courses.dessert = v } }
   ]
 }
+
+// A recipe PDF's QR code links here as /?addRecipe=<id>, so scanning it drops the recipe
+// straight into the trip as an extra (generating a default itinerary first if none exists yet).
+const route = useRoute()
+const router = useRouter()
+
+onMounted(async () => {
+  const addRecipeId = route.query.addRecipe
+  if (typeof addRecipeId !== 'string') return
+
+  await router.replace({ query: { ...route.query, addRecipe: undefined } })
+
+  try {
+    const recipe = await $fetch<Recipe>(`/api/recipes/${addRecipeId}`)
+    await addExtraRecipe(recipe)
+  } catch (error: any) {
+    errorMessage.value = error.data?.message ?? error.statusMessage ?? 'Could not find that recipe.'
+  }
+})
 </script>
 
 <template>
@@ -143,6 +165,22 @@ function servingsFields(mealLabel: string, courses: CourseSelection): ServingsFi
             </ul>
           </div>
         </article>
+      </div>
+
+      <div v-if="itinerary.extras?.length" class="extras">
+        <h3>Extra recipes <span class="extras-hint">(added without a day)</span></h3>
+        <ul>
+          <li v-for="recipe in itinerary.extras" :key="recipe.id" class="extra-item">
+            <span>{{ recipe.name }} <span class="meal-meta">&middot; Serves {{ recipe.servings }}</span></span>
+            <button
+              type="button" class="remove-extra-button"
+              :disabled="addingRecipeId === recipe.id"
+              @click="removeExtraRecipe(recipe.id)"
+            >
+              Remove
+            </button>
+          </li>
+        </ul>
       </div>
 
       <div class="shopping-list">
@@ -436,6 +474,65 @@ button[type='submit']:disabled {
 .ingredient-translation {
   color: var(--muted);
   font-style: italic;
+}
+
+.extras {
+  margin-top: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.extras h3 {
+  color: var(--portugal-red);
+  margin: 0 0 12px;
+}
+
+.extras-hint {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 0.8rem;
+}
+
+.extras ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.extra-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+
+.extra-item:last-child {
+  border-bottom: none;
+}
+
+.remove-extra-button {
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 10px;
+  font-size: 0.78rem;
+  color: var(--portugal-red);
+  cursor: pointer;
+}
+
+.remove-extra-button:hover:not(:disabled) {
+  background: var(--bg);
+}
+
+.remove-extra-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .shopping-list {

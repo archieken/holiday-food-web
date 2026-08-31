@@ -4,7 +4,7 @@ import { capitalize, COUNTRY, placeLabel } from '~~/composables/useItineraryPlan
 
 useHead({ title: 'Explore Recipes - Tavira Recipe Maker' })
 
-const { daySelections, addingRecipeId, errorMessage, addRecipe } = useItineraryPlanner()
+const { daySelections, addingRecipeId, errorMessage, addRecipe, addExtraRecipe } = useItineraryPlanner()
 
 const { data: recipes, pending, error } = await useFetch<Recipe[]>('/api/recipes', {
   query: { country: COUNTRY }
@@ -124,6 +124,14 @@ async function printRecipe(recipe: Recipe) {
             {{ addingRecipeId === recipe.id ? 'Adding…' : `Add to Day ${dayFor(recipe)}` }}
           </button>
         </div>
+
+        <button
+          type="button" class="add-extra-button"
+          :disabled="addingRecipeId === recipe.id"
+          @click="addExtraRecipe(recipe)"
+        >
+          {{ addingRecipeId === recipe.id ? 'Adding…' : 'Add without a day' }}
+        </button>
       </article>
     </div>
   </div>
@@ -303,6 +311,29 @@ async function printRecipe(recipe: Recipe) {
 }
 
 .add-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.add-extra-button {
+  width: 100%;
+  margin-top: 8px;
+  background: none;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.add-extra-button:hover:not(:disabled) {
+  background: var(--bg);
+  color: var(--portugal-green);
+}
+
+.add-extra-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }

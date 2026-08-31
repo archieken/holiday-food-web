@@ -41,6 +41,13 @@ export interface ItineraryResponse {
   days: number
   itinerary: DayPlan[]
   shoppingList: Ingredient[]
+  extras: Recipe[]
+}
+
+/** A recipe added to the trip without being tied to a specific day. */
+export interface ExtraRecipeSelection {
+  recipeId: string
+  servings: number
 }
 
 /** Number of people to cook that course for, or null to skip it. */
@@ -60,6 +67,7 @@ export interface ItineraryRequest {
   country: string
   town?: string | null
   days: MealSelection[]
+  extraRecipes?: ExtraRecipeSelection[]
 }
 
 export interface RefreshRecipeRequest extends ItineraryRequest {

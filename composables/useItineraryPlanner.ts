@@ -1,4 +1,4 @@
-import type { CourseSelection, DayPlan, ItineraryResponse, MealSelection, Recipe } from '~~/shared/types/itinerary'
+import type { CourseSelection, DayPlan, ExtraRecipeSelection, ItineraryResponse, MealSelection, Recipe } from '~~/shared/types/itinerary'
 
 // Every recipe is Portuguese, drawn from the full national catalogue - there's no
 // country/town filtering to select here.
@@ -65,6 +65,7 @@ export function useItineraryPlanner() {
   const daySelections = useState<MealSelection[]>('planner-day-selections', () =>
     Array.from({ length: days.value }, () => defaultSelection(tripServings.value))
   )
+  const extraRecipes = useState<ExtraRecipeSelection[]>('planner-extra-recipes', () => [])
 
   const itinerary = useState<ItineraryResponse | null>('planner-itinerary', () => null)
   const loading = useState('planner-loading', () => false)
@@ -113,7 +114,7 @@ export function useItineraryPlanner() {
     try {
       itinerary.value = await $fetch<ItineraryResponse>('/api/itinerary', {
         method: 'POST',
-        body: { country: COUNTRY, days: daySelections.value }
+        body: { country: COUNTRY, days: daySelections.value, extraRecipes: extraRecipes.value }
       })
     } catch (error: any) {
       errorMessage.value = error.data?.message ?? error.statusMessage ?? 'Something went wrong generating the itinerary.'
@@ -134,7 +135,7 @@ export function useItineraryPlanner() {
     try {
       const blob = await $fetch<Blob>('/api/itinerary/pdf', {
         method: 'POST',
-        body: { country: COUNTRY, days: daySelections.value },
+        body: { country: COUNTRY, days: daySelections.value, extraRecipes: extraRecipes.value },
         responseType: 'blob'
       })
       const url = URL.createObjectURL(blob)
@@ -185,6 +186,7 @@ export function useItineraryPlanner() {
         body: {
           country: COUNTRY,
           days: daySelections.value,
+          extraRecipes: extraRecipes.value,
           day: dayNumber,
           meal: entry.meal,
           course: entry.course,
@@ -237,6 +239,7 @@ export function useItineraryPlanner() {
         body: {
           country: COUNTRY,
           days: daySelections.value,
+          extraRecipes: extraRecipes.value,
           day: dayNumber,
           meal,
           course,
@@ -250,10 +253,56 @@ export function useItineraryPlanner() {
     }
   }
 
+  /**
+   * Adds a recipe to the trip without tying it to any day, meal, or course - it's still
+   * scaled to the trip-wide servings count and folded into the shopping list. Used by the
+   * Explore Recipes page's "Add without a day" button and by a recipe PDF's QR code.
+   */
+  async function addExtraRecipe(recipe: Recipe) {
+    addingRecipeId.value = recipe.id
+    errorMessage.value = ''
+
+    if (!extraRecipes.value.some((extra) => extra.recipeId === recipe.id)) {
+      extraRecipes.value = [...extraRecipes.value, { recipeId: recipe.id, servings: tripServings.value }]
+    }
+
+    try {
+      itinerary.value = await $fetch<ItineraryResponse>('/api/itinerary', {
+        method: 'POST',
+        body: { country: COUNTRY, days: daySelections.value, extraRecipes: extraRecipes.value }
+      })
+    } catch (error: any) {
+      errorMessage.value = error.data?.message ?? error.statusMessage ?? 'Something went wrong adding that recipe.'
+    } finally {
+      addingRecipeId.value = null
+    }
+  }
+
+  /** Removes a recipe added without a day, and refreshes the itinerary/shopping list to match. */
+  async function removeExtraRecipe(recipeId: string) {
+    extraRecipes.value = extraRecipes.value.filter((extra) => extra.recipeId !== recipeId)
+    if (!itinerary.value) return
+
+    loading.value = true
+    errorMessage.value = ''
+
+    try {
+      itinerary.value = await $fetch<ItineraryResponse>('/api/itinerary', {
+        method: 'POST',
+        body: { country: COUNTRY, days: daySelections.value, extraRecipes: extraRecipes.value }
+      })
+    } catch (error: any) {
+      errorMessage.value = error.data?.message ?? error.statusMessage ?? 'Something went wrong removing that recipe.'
+    } finally {
+      loading.value = false
+    }
+  }
+
   return {
     days,
     tripServings,
     daySelections,
+    extraRecipes,
     itinerary,
     loading,
     pdfLoading,
@@ -265,6 +314,8 @@ export function useItineraryPlanner() {
     openPdf,
     openShoppingList,
     refreshRecipe,
-    addRecipe
+    addRecipe,
+    addExtraRecipe,
+    removeExtraRecipe
   }
 }
