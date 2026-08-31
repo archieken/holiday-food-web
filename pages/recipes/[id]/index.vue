@@ -25,6 +25,10 @@ function uploaderLabel(r: Recipe): string {
 const brokenImage = ref(false)
 const likingRecipe = ref(false)
 
+const canEdit = computed(() =>
+  !!user.value && !!recipe.value && (user.value.admin || user.value.email === recipe.value.createdByEmail)
+)
+
 async function toggleLike() {
   if (!recipe.value) return
   if (!user.value) {
@@ -201,6 +205,12 @@ function formatDate(iso: string): string {
           >
             {{ addingRecipeId === recipe.id ? 'Adding…' : 'Add without a day' }}
           </button>
+          <NuxtLink
+            v-if="canEdit"
+            :to="`/recipes/${recipe.id}/edit`" class="edit-button"
+          >
+            Edit recipe
+          </NuxtLink>
           <button
             v-if="user?.admin"
             type="button" class="delete-button"
@@ -376,7 +386,8 @@ function formatDate(iso: string): string {
   margin-bottom: 20px;
 }
 
-.actions button {
+.actions button,
+.actions a {
   flex: 1;
   min-width: 140px;
   padding: 8px 14px;
@@ -384,6 +395,8 @@ function formatDate(iso: string): string {
   font-weight: 600;
   font-size: 0.85rem;
   cursor: pointer;
+  text-align: center;
+  text-decoration: none;
 }
 
 .print-button {
@@ -404,6 +417,16 @@ function formatDate(iso: string): string {
 
 .add-extra-button:hover:not(:disabled) {
   opacity: 0.92;
+}
+
+.edit-button {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--portugal-green);
+}
+
+.edit-button:hover {
+  background: var(--bg);
 }
 
 .delete-button {
