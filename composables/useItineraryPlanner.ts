@@ -69,6 +69,7 @@ export function useItineraryPlanner() {
   const itinerary = useState<ItineraryResponse | null>('planner-itinerary', () => null)
   const loading = useState('planner-loading', () => false)
   const pdfLoading = useState('planner-pdf-loading', () => false)
+  const shoppingListLoading = useState('planner-shopping-list-loading', () => false)
   const errorMessage = useState('planner-error', () => '')
   const refreshingSlot = useState<string | null>('planner-refreshing-slot', () => null)
   const addingRecipeId = useState<string | null>('planner-adding-recipe-id', () => null)
@@ -147,6 +148,29 @@ export function useItineraryPlanner() {
       errorMessage.value = error.data?.message ?? error.statusMessage ?? 'Something went wrong generating the PDF.'
     } finally {
       pdfLoading.value = false
+    }
+  }
+
+  /** Saves the current shopping list under its own id and navigates to its shareable page. */
+  async function openShoppingList() {
+    if (!itinerary.value) return
+
+    shoppingListLoading.value = true
+    errorMessage.value = ''
+
+    try {
+      const list = await $fetch<{ id: string }>('/api/shopping-lists', {
+        method: 'POST',
+        body: {
+          title: `${itinerary.value.days}-Day Trip`,
+          items: itinerary.value.shoppingList
+        }
+      })
+      await navigateTo(`/shopping-list/${list.id}`)
+    } catch (error: any) {
+      errorMessage.value = error.data?.message ?? error.statusMessage ?? 'Something went wrong creating the shopping list.'
+    } finally {
+      shoppingListLoading.value = false
     }
   }
 
@@ -233,11 +257,13 @@ export function useItineraryPlanner() {
     itinerary,
     loading,
     pdfLoading,
+    shoppingListLoading,
     errorMessage,
     refreshingSlot,
     addingRecipeId,
     generate,
     openPdf,
+    openShoppingList,
     refreshRecipe,
     addRecipe
   }

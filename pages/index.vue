@@ -11,10 +11,12 @@ const {
   itinerary,
   loading,
   pdfLoading,
+  shoppingListLoading,
   errorMessage,
   refreshingSlot,
   generate,
   openPdf,
+  openShoppingList,
   refreshRecipe
 } = useItineraryPlanner()
 
@@ -144,7 +146,12 @@ function servingsFields(mealLabel: string, courses: CourseSelection): ServingsFi
       </div>
 
       <div class="shopping-list">
-        <h3>Shopping list</h3>
+        <div class="shopping-list-header">
+          <h3>Shopping list</h3>
+          <button type="button" class="pdf-button" :disabled="shoppingListLoading" @click="openShoppingList">
+            {{ shoppingListLoading ? 'Preparing…' : 'Open shareable list' }}
+          </button>
+        </div>
         <ul>
           <li v-for="ingredient in itinerary.shoppingList" :key="ingredient.name">
             {{ ingredient.quantity }} {{ ingredient.unit }} {{ ingredient.name }}
@@ -439,9 +446,18 @@ button[type='submit']:disabled {
   padding: 20px;
 }
 
-.shopping-list h3 {
+.shopping-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.shopping-list-header h3 {
   color: var(--portugal-red);
-  margin: 0 0 12px;
+  margin: 0;
 }
 
 .shopping-list ul {
