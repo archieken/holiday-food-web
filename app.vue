@@ -4,7 +4,14 @@ import type { DayPlan, ItineraryResponse, MealSelection, Recipe } from '~~/share
 const { data: countries } = await useFetch<string[]>('/api/countries')
 
 const country = ref(countries.value?.[0] ?? '')
+const town = ref('')
 const days = ref(3)
+
+const { data: towns } = await useFetch<string[]>('/api/towns', { query: { country } })
+
+watch(towns, (available) => {
+  if (town.value && !available?.includes(town.value)) town.value = ''
+})
 
 function defaultSelection(): MealSelection {
   return {
@@ -46,7 +53,7 @@ async function generate() {
   try {
     itinerary.value = await $fetch<ItineraryResponse>('/api/itinerary', {
       method: 'POST',
-      body: { country: country.value, days: daySelections.value }
+      body: { country: country.value, town: town.value || null, days: daySelections.value }
     })
   } catch (error: any) {
     errorMessage.value = error.data?.message ?? error.statusMessage ?? 'Something went wrong generating the itinerary.'
@@ -69,7 +76,7 @@ async function openPdf() {
   try {
     const blob = await $fetch<Blob>('/api/itinerary/pdf', {
       method: 'POST',
-      body: { country: country.value, days: daySelections.value },
+      body: { country: country.value, town: town.value || null, days: daySelections.value },
       responseType: 'blob'
     })
     const url = URL.createObjectURL(blob)
@@ -120,7 +127,7 @@ function capitalize(value: string): string {
 
     <header class="hero">
       <h1>Holiday Food Itinerary</h1>
-      <p>Pick a country, how many days you're staying, and which meals and courses you want each day.</p>
+      <p>Pick a country, optionally a town for a mix of regional and national dishes, how many days you're staying, and which meals and courses you want each day.</p>
     </header>
 
     <form class="planner" @submit.prevent="generate">
@@ -129,6 +136,14 @@ function capitalize(value: string): string {
           <label for="country">Country</label>
           <select id="country" v-model="country">
             <option v-for="c in countries" :key="c" :value="c">{{ c }}</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="town">Town</label>
+          <select id="town" v-model="town">
+            <option value="">Any (nationwide)</option>
+            <option v-for="t in towns" :key="t" :value="t">{{ t }}</option>
           </select>
         </div>
 
@@ -172,7 +187,7 @@ function capitalize(value: string): string {
 
     <section v-if="itinerary" class="results">
       <div class="results-header">
-        <h2>{{ itinerary.country }} — {{ itinerary.days }}-day trip</h2>
+        <h2>{{ itinerary.town ? `${itinerary.town}, ${itinerary.country}` : itinerary.country }} — {{ itinerary.days }}-day trip</h2>
         <button type="button" class="pdf-button" :disabled="pdfLoading" @click="openPdf">
           {{ pdfLoading ? 'Preparing PDF…' : 'View / print PDF' }}
         </button>
