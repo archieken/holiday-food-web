@@ -60,7 +60,6 @@ export interface DayPlan {
 
 export interface ItineraryResponse {
   country: string
-  town: string | null
   days: number
   itinerary: DayPlan[]
   shoppingList: Ingredient[]
@@ -84,7 +83,6 @@ export interface MealSelection {
 
 export interface ItineraryRequest {
   country: string
-  town?: string | null
   days: MealSelection[]
   extraRecipes?: ExtraRecipeSelection[]
 }
