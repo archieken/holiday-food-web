@@ -22,7 +22,22 @@ function uploaderLabel(r: Recipe): string {
   return r.createdByName ?? r.createdByEmail ?? 'Tavira Recipe Maker'
 }
 
-const brokenImage = ref(false)
+const PLACEHOLDER_IMAGE = '/images/recipe-placeholder.svg'
+
+// Starts as the placeholder and only switches to the real photo once mounted, so the
+// @error listener below is guaranteed to be attached before the browser can finish (or
+// fail) loading it - attaching it any earlier risks losing a fast 404 to the SSR/hydration
+// race, since the server-rendered <img> would otherwise start loading immediately.
+const imageSrc = ref(PLACEHOLDER_IMAGE)
+
+onMounted(() => {
+  if (recipe.value) imageSrc.value = `/api/recipes/${recipe.value.id}/image`
+})
+
+function onImageError() {
+  imageSrc.value = PLACEHOLDER_IMAGE
+}
+
 const likingRecipe = ref(false)
 
 const canEdit = computed(() =>
@@ -163,12 +178,12 @@ function formatDate(iso: string): string {
 
     <template v-else-if="recipe">
       <article class="recipe">
-        <div v-if="!brokenImage" class="recipe-image-wrap">
+        <div class="recipe-image-wrap">
           <img
-            :src="`/api/recipes/${recipe.id}/image`"
+            :src="imageSrc"
             :alt="recipe.name"
             class="recipe-image"
-            @error="brokenImage = true"
+            @error="onImageError"
           >
         </div>
 

@@ -92,9 +92,28 @@ async function toggleLike(recipe: Recipe) {
   }
 }
 
-// Not every recipe necessarily has a photo - hide the image area for any that 404 rather
-// than showing a broken-image icon.
-const brokenImages = ref<Record<string, boolean>>({})
+const PLACEHOLDER_IMAGE = '/images/recipe-placeholder.svg'
+
+// Every card starts on the placeholder and only switches to the real photo once mounted,
+// so each @error listener below is guaranteed to be attached before the browser can
+// finish (or fail) loading it - attaching it any earlier risks losing a fast 404 to the
+// SSR/hydration race, since the server-rendered <img> would otherwise start loading
+// immediately. Not every recipe necessarily has a photo, so some stay on the placeholder.
+const imageSrcs = ref<Record<string, string>>({})
+
+function imageSrcFor(recipeId: string): string {
+  return imageSrcs.value[recipeId] ?? PLACEHOLDER_IMAGE
+}
+
+function onImageError(recipeId: string) {
+  imageSrcs.value[recipeId] = PLACEHOLDER_IMAGE
+}
+
+onMounted(() => {
+  for (const recipe of recipes.value ?? []) {
+    imageSrcs.value[recipe.id] = `/api/recipes/${recipe.id}/image`
+  }
+})
 
 const printingRecipeId = ref<string | null>(null)
 
@@ -166,12 +185,12 @@ async function printRecipe(recipe: Recipe) {
     <div v-if="recipes" class="recipes">
       <article v-for="recipe in visibleRecipes" :key="recipe.id" class="recipe-card">
         <NuxtLink :to="`/recipes/${recipe.id}`" class="recipe-link">
-          <div v-if="!brokenImages[recipe.id]" class="recipe-image-wrap">
+          <div class="recipe-image-wrap">
             <img
-              :src="`/api/recipes/${recipe.id}/image`"
+              :src="imageSrcFor(recipe.id)"
               :alt="recipe.name"
               class="recipe-image"
-              @error="brokenImages[recipe.id] = true"
+              @error="onImageError(recipe.id)"
             >
           </div>
         </NuxtLink>

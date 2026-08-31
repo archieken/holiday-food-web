@@ -67,6 +67,16 @@ const sortedItems = computed(() => {
   return [...list.value.items].sort((a, b) => Number(a.checked) - Number(b.checked))
 })
 
+/** Speaks an ingredient's Portuguese name aloud via the browser's built-in text-to-speech. */
+function pronounce(text: string) {
+  if (typeof window === 'undefined' || !window.speechSynthesis) return
+
+  const utterance = new SpeechSynthesisUtterance(text)
+  utterance.lang = 'pt-PT'
+  window.speechSynthesis.cancel()
+  window.speechSynthesis.speak(utterance)
+}
+
 async function copyLink() {
   try {
     await navigator.clipboard.writeText(window.location.href)
@@ -112,7 +122,15 @@ onUnmounted(() => {
             >
             <span class="item-text">
               {{ item.quantity }} {{ item.unit }} {{ item.name }}
-              <span v-if="item.translatedName" class="ingredient-translation">({{ item.translatedName }})</span>
+              <span v-if="item.translatedName" class="ingredient-translation">
+                ({{ item.translatedName }})
+                <button
+                  type="button" class="pronounce-button" title="Hear the Portuguese pronunciation"
+                  @click.stop.prevent="pronounce(item.translatedName!)"
+                >
+                  🔊
+                </button>
+              </span>
               <span v-if="item.recipeNames.length" class="ingredient-source">{{ item.recipeNames.join(', ') }}</span>
             </span>
           </label>
@@ -221,6 +239,21 @@ label.checked .item-text {
 .ingredient-translation {
   color: var(--muted);
   font-style: italic;
+}
+
+.pronounce-button {
+  background: none;
+  border: none;
+  padding: 0 0 0 2px;
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+  vertical-align: middle;
+  opacity: 0.75;
+}
+
+.pronounce-button:hover {
+  opacity: 1;
 }
 
 .ingredient-source {
