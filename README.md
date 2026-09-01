@@ -4,7 +4,7 @@ Nuxt 3 frontend for **Tavira Recipe Maker** — plan a Portugal holiday's meals 
 
 Talks to the [holiday-food-api](../holiday-food-api) Spring Boot backend through this app's own `/api/*` server routes (a thin proxy layer, so the browser never calls the backend or holds its secrets directly).
 
-Live at **https://holiday-food-web.vercel.app** (auto-deploys from `main` via Vercel).
+Live at **https://tavira-recipe-maker.vercel.app** (auto-deploys from `main` via Vercel).
 
 ## Tech stack
 
