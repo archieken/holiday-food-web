@@ -35,6 +35,14 @@ export function mealEntries(day: DayPlan): MealEntry[] {
   return candidates.filter((entry): entry is MealEntry => entry.recipe !== null)
 }
 
+/** The recipe currently occupying a given (day, slot) meal, or null if it's empty. */
+export function recipeForSlot(day: DayPlan, slot: MealSlot): Recipe | null {
+  if (slot === 'BREAKFAST') return day.breakfast
+  if (slot === 'LUNCH') return day.lunch
+  if (slot === 'DINNER') return day.dinner
+  return day.dessert
+}
+
 /**
  * Which day slot(s) a recipe can be assigned to, based on its course. A Main
  * recipe can go into either Lunch or Dinner (there's no lunch/dinner
@@ -311,10 +319,19 @@ export function useItineraryPlanner() {
    * Moves a recipe out of "extras" and into a specific day + slot - the only way a recipe
    * can be assigned to a day, since Explore Recipes only offers "Add to Itinerary". The
    * caller picks the slot (see {@link targetSlotsFor}) since a Main recipe could go into
-   * either Lunch or Dinner.
+   * either Lunch or Dinner. If that meal is already taken, the displaced recipe becomes an
+   * extra itself rather than being dropped from the trip.
    */
   async function assignExtraToDay(recipe: Recipe, dayNumber: number, slot: MealSlot) {
-    extraRecipes.value = extraRecipes.value.filter((extra) => extra.recipeId !== recipe.id)
+    const day = itinerary.value?.itinerary.find((d) => d.day === dayNumber)
+    const displaced = day ? recipeForSlot(day, slot) : null
+
+    let nextExtras = extraRecipes.value.filter((extra) => extra.recipeId !== recipe.id)
+    if (displaced && displaced.id !== recipe.id) {
+      nextExtras = [...nextExtras, { recipeId: displaced.id, servings: displaced.servings }]
+    }
+    extraRecipes.value = nextExtras
+
     await addRecipe(dayNumber, slot, recipe)
   }
 

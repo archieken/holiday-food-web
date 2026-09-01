@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { MealSlot, Recipe } from '~~/shared/types/itinerary'
-import { capitalize, COUNTRY, type MealEntry, mealEntries, placeLabel, slotKey, targetSlotsFor } from '~~/composables/useItineraryPlanner'
+import { capitalize, COUNTRY, type MealEntry, mealEntries, placeLabel, recipeForSlot, slotKey, targetSlotsFor } from '~~/composables/useItineraryPlanner'
 
 useHead({ title: 'Tavira Recipe Maker' })
 
@@ -76,6 +76,17 @@ function setSlotForExtra(recipe: Recipe, slot: MealSlot) {
   extraRecipeSlot.value[recipe.id] = slot
 }
 
+// Whether assigning this extra to its currently-picked day/slot would bump an existing
+// meal out to the extras list, rather than just filling an empty one.
+function willSwap(recipe: Recipe): boolean {
+  const day = itinerary.value?.itinerary.find((d) => d.day === dayForExtra(recipe))
+  const slot = slotForExtra(recipe)
+  if (!day || !slot) return false
+
+  const occupant = recipeForSlot(day, slot)
+  return occupant !== null && occupant.id !== recipe.id
+}
+
 const PLACEHOLDER_IMAGE = '/images/recipe-placeholder.svg'
 
 // The itinerary is only ever populated client-side (in response to a button click), so
@@ -149,7 +160,7 @@ function stepServings(dayNumber: number, entry: MealEntry, direction: 1 | -1) {
         </div>
 
         <div class="field">
-          <label for="servings">Servings</label>
+          <label for="servings">People</label>
           <select id="servings" v-model.number="tripServings" required>
             <option :value="2">2</option>
             <option :value="4">4</option>
@@ -257,7 +268,7 @@ function stepServings(dayNumber: number, entry: MealEntry, direction: 1 | -1) {
       </div>
 
       <div class="extras">
-        <h3>Extra recipes <span class="extras-hint">(added without a day)</span></h3>
+        <h3>Extras <span class="extras-hint">&middot; unscheduled</span></h3>
 
         <div class="extra-search">
           <input
@@ -279,40 +290,42 @@ function stepServings(dayNumber: number, entry: MealEntry, direction: 1 | -1) {
           <li v-for="recipe in itinerary.extras" :key="recipe.id" class="extra-item">
             <span>{{ recipe.name }} <span class="meal-meta">&middot; Serves {{ recipe.servings }}</span></span>
             <div class="extra-actions">
-              <template v-if="targetSlotsFor(recipe).length > 0">
-                <label class="day-picker">
-                  Day
-                  <select
-                    :value="dayForExtra(recipe)"
-                    @change="setDayForExtra(recipe, Number(($event.target as HTMLSelectElement).value))"
-                  >
-                    <option v-for="(_, index) in daySelections" :key="index" :value="index + 1">{{ index + 1 }}</option>
-                  </select>
-                </label>
-                <label v-if="targetSlotsFor(recipe).length > 1" class="day-picker">
-                  Meal
-                  <select
-                    :value="slotForExtra(recipe)"
-                    @change="setSlotForExtra(recipe, ($event.target as HTMLSelectElement).value as MealSlot)"
-                  >
-                    <option v-for="slot in targetSlotsFor(recipe)" :key="slot" :value="slot">{{ capitalize(slot) }}</option>
-                  </select>
-                </label>
+              <span v-if="targetSlotsFor(recipe).length > 0" class="sentence-pill">
+                {{ willSwap(recipe) ? 'Switch' : 'Add to' }}
+                <select
+                  :value="dayForExtra(recipe)"
+                  aria-label="Day"
+                  @change="setDayForExtra(recipe, Number(($event.target as HTMLSelectElement).value))"
+                >
+                  <option v-for="(_, index) in daySelections" :key="index" :value="index + 1">Day {{ index + 1 }}</option>
+                </select>
+                <select
+                  v-if="targetSlotsFor(recipe).length > 1"
+                  :value="slotForExtra(recipe)"
+                  aria-label="Meal"
+                  @change="setSlotForExtra(recipe, ($event.target as HTMLSelectElement).value as MealSlot)"
+                >
+                  <option v-for="slot in targetSlotsFor(recipe)" :key="slot" :value="slot">{{ capitalize(slot) }}</option>
+                </select>
                 <button
-                  type="button" class="assign-button"
+                  type="button" class="pill-confirm"
                   :disabled="addingRecipeId === recipe.id"
+                  :aria-label="`${willSwap(recipe) ? 'Switch with' : 'Add to'} Day ${dayForExtra(recipe)}`"
+                  :title="willSwap(recipe) ? 'Switch' : 'Add'"
                   @click="assignExtraToDay(recipe, dayForExtra(recipe), slotForExtra(recipe)!)"
                 >
-                  {{ addingRecipeId === recipe.id ? 'Adding…' : `Add to Day ${dayForExtra(recipe)}` }}
+                  {{ addingRecipeId === recipe.id ? '…' : (willSwap(recipe) ? '⇄' : '→') }}
                 </button>
-              </template>
-              <span v-else class="meal-meta">Starters aren't scheduled into a day.</span>
+              </span>
+              <span v-else class="meal-meta">Not tied to a day</span>
               <button
                 type="button" class="remove-extra-button"
                 :disabled="addingRecipeId === recipe.id"
+                :aria-label="`Remove ${recipe.name}`"
+                title="Remove"
                 @click="removeExtraRecipe(recipe.id)"
               >
-                Remove
+                &#10005;
               </button>
             </div>
           </li>
@@ -783,44 +796,57 @@ button[type='submit']:disabled {
   flex-wrap: wrap;
 }
 
-.day-picker {
-  display: flex;
+.sentence-pill {
+  display: inline-flex;
   align-items: center;
   gap: 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 4px 3px 12px;
   font-size: 0.85rem;
   color: var(--muted);
 }
 
-.day-picker select {
-  padding: 4px 6px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+.sentence-pill select {
+  border: none;
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 3px 10px;
   font-size: 0.85rem;
+  color: var(--ink);
 }
 
-.assign-button {
+.pill-confirm {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
   background: var(--portugal-green);
   color: white;
   border: none;
-  border-radius: 8px;
-  padding: 6px 14px;
-  font-weight: 600;
   font-size: 0.85rem;
+  line-height: 1;
   cursor: pointer;
 }
 
-.assign-button:disabled {
+.pill-confirm:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
 
 .remove-extra-button {
   flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: none;
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 2px 10px;
-  font-size: 0.78rem;
+  border-radius: 50%;
+  padding: 0;
+  font-size: 0.72rem;
   color: var(--portugal-red);
   cursor: pointer;
 }
