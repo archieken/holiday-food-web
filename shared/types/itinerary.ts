@@ -87,6 +87,28 @@ export interface ItineraryRequest {
   extraRecipes?: ExtraRecipeSelection[]
 }
 
+/** Body for creating or autosaving a saved trip plan. Dates are 'YYYY-MM-DD' strings. */
+export interface SaveItineraryRequest {
+  name: string
+  startDate: string
+  endDate: string
+  partySize: number
+  days: MealSelection[]
+  extraRecipes: ExtraRecipeSelection[]
+}
+
+/** A saved trip plan's metadata plus its resolved day-by-day recipes. */
+export interface SavedItineraryResponse {
+  id: string
+  name: string
+  startDate: string
+  endDate: string
+  partySize: number
+  days: MealSelection[]
+  extraRecipes: ExtraRecipeSelection[]
+  resolved: ItineraryResponse
+}
+
 export interface RefreshRecipeRequest extends ItineraryRequest {
   day: number
   slot: MealSlot

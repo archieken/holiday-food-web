@@ -7,17 +7,24 @@ useHead({ title: 'Tavira Recipe Maker' })
 const { authHeaders } = useAuth()
 
 const {
-  days,
+  name,
+  startDate,
+  endDate,
+  tripLength,
   tripServings,
   daySelections,
   extraRecipes,
   itinerary,
-  loading,
+  saving,
   shoppingListLoading,
   errorMessage,
   refreshingSlot,
   addingRecipeId,
-  generate,
+  initialize,
+  setName,
+  setStartDate,
+  setEndDate,
+  setPartySize,
   openShoppingList,
   refreshRecipe,
   removeRecipe,
@@ -26,6 +33,9 @@ const {
   removeExtraRecipe,
   assignExtraToDay
 } = useItineraryPlanner()
+
+// Finds today's saved itinerary or creates a fresh, empty one before the page renders.
+await initialize()
 
 // Catalogue used to power the "add a recipe" autofill in the extras section - fetched once,
 // filtered client-side as the user types.
@@ -149,37 +159,56 @@ function stepServings(dayNumber: number, entry: MealEntry, direction: 1 | -1) {
 
     <header class="hero">
       <h1>Tavira Recipe Maker</h1>
-      <p>Pick how many days you're staying and how many people you're cooking for, then choose which meals you want each day.</p>
+      <p>Pick your dates and how many people you're cooking for, then search recipes to add to each day.</p>
     </header>
 
-    <form class="planner" @submit.prevent="generate">
+    <form class="planner" @submit.prevent>
+      <div class="field field-name">
+        <label for="itinerary-name">Itinerary name</label>
+        <input
+          id="itinerary-name" :value="name" type="text" required
+          @change="setName(($event.target as HTMLInputElement).value)"
+        >
+      </div>
+
       <div class="planner-top">
         <div class="field">
-          <label for="days">Days</label>
-          <input id="days" v-model.number="days" type="number" min="1" max="60" required>
+          <label for="start-date">Start date</label>
+          <input
+            id="start-date" :value="startDate" type="date" required
+            @change="setStartDate(($event.target as HTMLInputElement).value)"
+          >
+        </div>
+
+        <div class="field">
+          <label for="end-date">End date</label>
+          <input
+            id="end-date" :value="endDate" type="date" required :min="startDate"
+            @change="setEndDate(($event.target as HTMLInputElement).value)"
+          >
         </div>
 
         <div class="field">
           <label for="servings">People</label>
-          <select id="servings" v-model.number="tripServings" required>
+          <select
+            id="servings" :value="tripServings" required
+            @change="setPartySize(Number(($event.target as HTMLSelectElement).value))"
+          >
             <option :value="2">2</option>
             <option :value="4">4</option>
             <option :value="6">6</option>
           </select>
         </div>
       </div>
-      <p class="servings-trip-hint">Sets Breakfast, Lunch and Dinner for every day - you can adjust or remove individual meals once your itinerary is generated.</p>
-
-      <button type="submit" :disabled="loading">
-        {{ loading ? 'Generating…' : 'Generate itinerary' }}
-      </button>
+      <p class="servings-trip-hint">{{ tripLength }}-day trip - changing the party size rescales any meals you've already added.</p>
+      <p v-if="saving" class="saving-hint">Saving…</p>
     </form>
 
     <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
 
     <section v-if="itinerary" class="results">
       <div class="results-header">
-        <h2>{{ itinerary.days }}-day trip</h2>
+        <h2>{{ name }}</h2>
         <button type="button" class="pdf-button" :disabled="shoppingListLoading" @click="openShoppingList">
           {{ shoppingListLoading ? 'Preparing…' : 'Open shopping list' }}
         </button>
@@ -376,15 +405,34 @@ function stepServings(dayNumber: number, entry: MealEntry, direction: 1 | -1) {
 }
 
 .servings-trip-hint {
-  margin: 0 0 16px;
+  margin: 0 0 8px;
   font-size: 0.78rem;
   color: var(--muted);
+}
+
+.saving-hint {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-style: italic;
 }
 
 .field {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.field-name {
+  margin-bottom: 16px;
+}
+
+.field-name input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 1rem;
 }
 
 .field label {
@@ -405,22 +453,6 @@ function stepServings(dayNumber: number, entry: MealEntry, direction: 1 | -1) {
 .field input[type='number'],
 .field select {
   min-width: 90px;
-}
-
-button[type='submit'] {
-  background: var(--portugal-red);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-button[type='submit']:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 
 .error {

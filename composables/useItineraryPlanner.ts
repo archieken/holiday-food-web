@@ -1,8 +1,21 @@
-import type { DayPlan, ExtraRecipeSelection, ItineraryResponse, MealSelection, MealSlot, Recipe } from '~~/shared/types/itinerary'
+import type {
+  DayPlan,
+  ExtraRecipeSelection,
+  ItineraryResponse,
+  MealSelection,
+  MealSlot,
+  Recipe,
+  SaveItineraryRequest,
+  SavedItineraryResponse
+} from '~~/shared/types/itinerary'
 
 // Every recipe is Portuguese, drawn from the full national catalogue - there's no
 // country/town filtering to select here.
 export const COUNTRY = 'Portugal'
+
+// How long to wait after the last edit to a field like the itinerary name before autosaving -
+// long enough that autosave doesn't fire on every keystroke.
+const AUTOSAVE_DEBOUNCE_MS = 600
 
 export interface MealEntry {
   label: string
@@ -10,8 +23,8 @@ export interface MealEntry {
   slot: MealSlot
 }
 
-function defaultSelection(servings: number): MealSelection {
-  return { breakfast: servings, lunch: servings, dinner: servings, dessert: null }
+function emptySelection(): MealSelection {
+  return { breakfast: null, lunch: null, dinner: null, dessert: null }
 }
 
 /** Converts a number input's raw string value to a servings count, or null if it's empty/invalid. */
@@ -67,71 +80,219 @@ export function capitalize(value: string): string {
   return value.charAt(0) + value.slice(1).toLowerCase()
 }
 
+function pad(n: number): string {
+  return n.toString().padStart(2, '0')
+}
+
+/** Today's date as a 'YYYY-MM-DD' string, in the browser's local timezone. */
+export function todayIso(): string {
+  const now = new Date()
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+}
+
+function parseIso(iso: string): Date {
+  const [year, month, day] = iso.split('-').map(Number)
+  return new Date(Date.UTC(year, month - 1, day))
+}
+
+function toIso(date: Date): string {
+  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`
+}
+
+export function addDaysIso(iso: string, days: number): string {
+  const date = parseIso(iso)
+  date.setUTCDate(date.getUTCDate() + days)
+  return toIso(date)
+}
+
+/** Number of days in a stay from `startIso` up to (not including) `endIso`, minimum 1. */
+export function dayCountBetween(startIso: string, endIso: string): number {
+  const diffDays = Math.round((parseIso(endIso).getTime() - parseIso(startIso).getTime()) / 86_400_000)
+  return Math.max(1, diffDays)
+}
+
+function formatDisplayDate(iso: string): string {
+  return parseIso(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
+}
+
+/** The default itinerary name for a given date range: "Tavira [start date] - [end date]". */
+export function generatedName(startIso: string, endIso: string): string {
+  return `Tavira ${formatDisplayDate(startIso)} - ${formatDisplayDate(endIso)}`
+}
+
 /**
- * Shared itinerary-planning state, lifted out of any single page via useState()
- * so both the home page and the Explore Recipes page read/write the same trip.
+ * Shared itinerary-planning state, lifted out of any single page via useState() so the home
+ * page and the Explore Recipes page read/write the same trip. The trip itself is persisted on
+ * the backend (found again by date, autosaved as it's edited) - see `initialize()`.
  */
 export function useItineraryPlanner() {
-  const days = useState('planner-days', () => 3)
+  const itineraryId = useState<string | null>('planner-id', () => null)
+  const name = useState('planner-name', () => '')
+  // Whether the user has typed their own name for this trip - if so, changing the dates should
+  // stop overwriting it with the auto-generated "Tavira ..." name.
+  const nameEditedManually = useState('planner-name-edited', () => false)
+  const startDate = useState('planner-start-date', () => todayIso())
+  const endDate = useState('planner-end-date', () => addDaysIso(todayIso(), 3))
   const tripServings = useState('planner-trip-servings', () => 2)
   const daySelections = useState<MealSelection[]>('planner-day-selections', () =>
-    Array.from({ length: days.value }, () => defaultSelection(tripServings.value))
+    Array.from({ length: 3 }, emptySelection)
   )
   const extraRecipes = useState<ExtraRecipeSelection[]>('planner-extra-recipes', () => [])
 
   const itinerary = useState<ItineraryResponse | null>('planner-itinerary', () => null)
-  const loading = useState('planner-loading', () => false)
+  const saving = useState('planner-saving', () => false)
   const shoppingListLoading = useState('planner-shopping-list-loading', () => false)
   const errorMessage = useState('planner-error', () => '')
   const refreshingSlot = useState<string | null>('planner-refreshing-slot', () => null)
   const addingRecipeId = useState<string | null>('planner-adding-recipe-id', () => null)
 
-  watch(days, (count) => {
-    const clamped = Math.min(Math.max(Math.round(count) || 1, 1), 60)
-    if (clamped !== count) {
-      days.value = clamped
-      return
-    }
+  let autosaveTimer: ReturnType<typeof setTimeout> | null = null
 
-    const current = daySelections.value
-    if (clamped > current.length) {
-      for (let i = current.length; i < clamped; i++) current.push(defaultSelection(tripServings.value))
-    } else {
-      current.length = clamped
-    }
-  })
+  const tripLength = computed(() => daySelections.value.length)
 
-  // The trip-wide servings selector sets Breakfast, Lunch and Dinner across all days;
-  // Dessert is left alone since it defaults to (and usually stays) unselected.
-  watch(tripServings, (count) => {
-    const clamped = Math.min(Math.max(Math.round(count) || 1, 1), 50)
-    if (clamped !== count) {
-      tripServings.value = clamped
-      return
-    }
+  function applyRecord(record: SavedItineraryResponse) {
+    itineraryId.value = record.id
+    name.value = record.name
+    nameEditedManually.value = record.name !== generatedName(record.startDate, record.endDate)
+    startDate.value = record.startDate
+    endDate.value = record.endDate
+    tripServings.value = record.partySize
+    daySelections.value = record.days.map((day) => ({ ...day }))
+    extraRecipes.value = record.extraRecipes.map((extra) => ({ ...extra }))
+    itinerary.value = record.resolved
+  }
 
-    for (const selection of daySelections.value) {
-      selection.breakfast = clamped
-      selection.lunch = clamped
-      selection.dinner = clamped
+  function currentSaveRequest(): SaveItineraryRequest {
+    return {
+      name: name.value,
+      startDate: startDate.value,
+      endDate: endDate.value,
+      partySize: tripServings.value,
+      days: daySelections.value,
+      extraRecipes: extraRecipes.value
     }
-  })
+  }
 
-  async function generate() {
-    loading.value = true
+  /**
+   * Loads the itinerary the household already has planned for today, or creates a fresh, empty
+   * one (3 days, 2 people, no meals selected) if there isn't one. Safe to call from multiple
+   * pages/components - only runs once per app load.
+   */
+  async function initialize() {
+    await callOnce('itinerary-planner-init', async () => {
+      const today = todayIso()
+      const existing = await $fetch<SavedItineraryResponse | null>('/api/itineraries/lookup', { query: { date: today } })
+
+      if (existing) {
+        applyRecord(existing)
+        return
+      }
+
+      const start = today
+      const end = addDaysIso(start, 3)
+      const created = await $fetch<SavedItineraryResponse>('/api/itineraries', {
+        method: 'POST',
+        body: {
+          name: generatedName(start, end),
+          startDate: start,
+          endDate: end,
+          partySize: 2,
+          days: Array.from({ length: 3 }, emptySelection),
+          extraRecipes: []
+        }
+      })
+      applyRecord(created)
+    })
+  }
+
+  /** Persists the current trip immediately. Only updates the displayed plan when `applyResolved` is true. */
+  async function persistNow(applyResolved: boolean) {
+    if (!itineraryId.value) return
+
+    saving.value = true
     errorMessage.value = ''
-    itinerary.value = null
 
     try {
-      itinerary.value = await $fetch<ItineraryResponse>('/api/itinerary', {
-        method: 'POST',
-        body: { country: COUNTRY, days: daySelections.value, extraRecipes: extraRecipes.value }
+      const record = await $fetch<SavedItineraryResponse>(`/api/itineraries/${itineraryId.value}`, {
+        method: 'PUT',
+        body: currentSaveRequest()
       })
+      if (applyResolved) itinerary.value = record.resolved
     } catch (error: any) {
-      errorMessage.value = error.data?.message ?? error.statusMessage ?? 'Something went wrong generating the itinerary.'
+      errorMessage.value = error.data?.message ?? error.statusMessage ?? 'Something went wrong saving your itinerary.'
     } finally {
-      loading.value = false
+      saving.value = false
     }
+  }
+
+  /**
+   * Persists the current trip a moment after the last change, without touching the displayed
+   * plan - used after actions (like "Try another recipe") that already show their own result
+   * and shouldn't have it overwritten by a plain re-save.
+   */
+  function persistDebounced() {
+    if (!itineraryId.value) return
+    if (autosaveTimer) clearTimeout(autosaveTimer)
+    autosaveTimer = setTimeout(() => { persistNow(false) }, AUTOSAVE_DEBOUNCE_MS)
+  }
+
+  /** If the household already has a different itinerary covering `date`, switches to viewing it. */
+  async function switchToItineraryForDate(date: string) {
+    try {
+      const match = await $fetch<SavedItineraryResponse | null>('/api/itineraries/lookup', { query: { date } })
+      if (match && match.id !== itineraryId.value) applyRecord(match)
+    } catch {
+      // Best-effort - if the lookup fails, keep editing the current itinerary under the new dates.
+    }
+  }
+
+  function resizeDaysForDateRange() {
+    const expected = dayCountBetween(startDate.value, endDate.value)
+    const current = daySelections.value
+    if (expected > current.length) {
+      for (let i = current.length; i < expected; i++) current.push(emptySelection())
+    } else if (expected < current.length) {
+      current.length = expected
+    }
+  }
+
+  function syncNameForDates() {
+    if (!nameEditedManually.value) name.value = generatedName(startDate.value, endDate.value)
+  }
+
+  async function setStartDate(value: string) {
+    startDate.value = value
+    syncNameForDates()
+    resizeDaysForDateRange()
+    await switchToItineraryForDate(value)
+    await persistNow(true)
+  }
+
+  async function setEndDate(value: string) {
+    endDate.value = value
+    syncNameForDates()
+    resizeDaysForDateRange()
+    await persistNow(true)
+  }
+
+  async function setPartySize(value: number) {
+    const clamped = Math.min(Math.max(Math.round(value) || 1, 1), 50)
+    tripServings.value = clamped
+
+    // Rescales any meal that's already selected - it doesn't turn any new meals on.
+    for (const selection of daySelections.value) {
+      if (selection.breakfast !== null) selection.breakfast = clamped
+      if (selection.lunch !== null) selection.lunch = clamped
+      if (selection.dinner !== null) selection.dinner = clamped
+    }
+
+    await persistNow(true)
+  }
+
+  function setName(value: string) {
+    name.value = value
+    nameEditedManually.value = true
+    persistDebounced()
   }
 
   /** Saves the current shopping list under its own id and navigates to its shareable page. */
@@ -174,6 +335,7 @@ export function useItineraryPlanner() {
           excludeRecipeId: entry.recipe.id
         }
       })
+      persistDebounced()
     } catch (error: any) {
       errorMessage.value = error.data?.message ?? error.statusMessage ?? 'Something went wrong refreshing that recipe.'
     } finally {
@@ -195,6 +357,7 @@ export function useItineraryPlanner() {
         method: 'POST',
         body: { country: COUNTRY, days: daySelections.value, extraRecipes: extraRecipes.value }
       })
+      persistDebounced()
     } catch (error: any) {
       errorMessage.value = error.data?.message ?? error.statusMessage ?? 'Something went wrong removing that recipe.'
     } finally {
@@ -216,6 +379,7 @@ export function useItineraryPlanner() {
         method: 'POST',
         body: { country: COUNTRY, days: daySelections.value, extraRecipes: extraRecipes.value }
       })
+      persistDebounced()
     } catch (error: any) {
       errorMessage.value = error.data?.message ?? error.statusMessage ?? 'Something went wrong updating servings.'
     } finally {
@@ -263,6 +427,7 @@ export function useItineraryPlanner() {
           recipeId: recipe.id
         }
       })
+      persistDebounced()
     } catch (error: any) {
       errorMessage.value = error.data?.message ?? error.statusMessage ?? 'Something went wrong adding that recipe.'
     } finally {
@@ -276,6 +441,7 @@ export function useItineraryPlanner() {
    * Explore Recipes page's "Add to Itinerary" button and by a recipe PDF's QR code.
    */
   async function addExtraRecipe(recipe: Recipe) {
+    await initialize()
     addingRecipeId.value = recipe.id
     errorMessage.value = ''
 
@@ -288,6 +454,7 @@ export function useItineraryPlanner() {
         method: 'POST',
         body: { country: COUNTRY, days: daySelections.value, extraRecipes: extraRecipes.value }
       })
+      persistDebounced()
     } catch (error: any) {
       errorMessage.value = error.data?.message ?? error.statusMessage ?? 'Something went wrong adding that recipe.'
     } finally {
@@ -300,7 +467,6 @@ export function useItineraryPlanner() {
     extraRecipes.value = extraRecipes.value.filter((extra) => extra.recipeId !== recipeId)
     if (!itinerary.value) return
 
-    loading.value = true
     errorMessage.value = ''
 
     try {
@@ -308,10 +474,9 @@ export function useItineraryPlanner() {
         method: 'POST',
         body: { country: COUNTRY, days: daySelections.value, extraRecipes: extraRecipes.value }
       })
+      persistDebounced()
     } catch (error: any) {
       errorMessage.value = error.data?.message ?? error.statusMessage ?? 'Something went wrong removing that recipe.'
-    } finally {
-      loading.value = false
     }
   }
 
@@ -336,21 +501,30 @@ export function useItineraryPlanner() {
   }
 
   return {
-    days,
+    itineraryId,
+    name,
+    startDate,
+    endDate,
+    tripLength,
     tripServings,
     daySelections,
     extraRecipes,
     itinerary,
-    loading,
+    saving,
     shoppingListLoading,
     errorMessage,
     refreshingSlot,
     addingRecipeId,
-    generate,
+    initialize,
+    setName,
+    setStartDate,
+    setEndDate,
+    setPartySize,
     openShoppingList,
     refreshRecipe,
     removeRecipe,
     changeServings,
+    addRecipe,
     addExtraRecipe,
     removeExtraRecipe,
     assignExtraToDay
