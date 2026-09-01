@@ -116,6 +116,34 @@ onMounted(() => {
 })
 
 const printingRecipeId = ref<string | null>(null)
+const printingAllRecipes = ref(false)
+
+/** Admin-only: every recipe in the catalogue as one PDF, with a numbered index up front. */
+async function printAllRecipes() {
+  const pdfWindow = window.open('', '_blank')
+
+  printingAllRecipes.value = true
+  errorMessage.value = ''
+
+  try {
+    const blob = await $fetch<Blob>('/api/recipes/pdf', {
+      query: { country: COUNTRY },
+      headers: authHeaders(),
+      responseType: 'blob'
+    })
+    const url = URL.createObjectURL(blob)
+    if (pdfWindow) {
+      pdfWindow.location.href = url
+    } else {
+      window.location.href = url
+    }
+  } catch (error: any) {
+    pdfWindow?.close()
+    errorMessage.value = error.data?.message ?? error.statusMessage ?? 'Something went wrong generating the recipe catalogue PDF.'
+  } finally {
+    printingAllRecipes.value = false
+  }
+}
 
 async function printRecipe(recipe: Recipe) {
   // Open the tab synchronously, inside the click's user gesture, so the
@@ -180,6 +208,15 @@ async function printRecipe(recipe: Recipe) {
           <option value="mostLiked">Most liked</option>
         </select>
       </label>
+
+      <button
+        v-if="user?.admin"
+        type="button" class="print-all-button"
+        :disabled="printingAllRecipes"
+        @click="printAllRecipes"
+      >
+        {{ printingAllRecipes ? 'Preparing…' : 'Print all recipes' }}
+      </button>
     </div>
 
     <div v-if="recipes" class="recipes">
@@ -311,6 +348,28 @@ async function printRecipe(recipe: Recipe) {
   border-radius: 6px;
   font-size: 0.85rem;
   color: var(--ink);
+}
+
+.print-all-button {
+  margin-left: auto;
+  align-self: center;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--portugal-green);
+  cursor: pointer;
+}
+
+.print-all-button:hover:not(:disabled) {
+  background: var(--bg);
+}
+
+.print-all-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .recipes {
