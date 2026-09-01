@@ -23,8 +23,7 @@ onMounted(async () => {
           <button type="button" class="sign-out-button" @click="signOut">Sign out</button>
         </template>
         <template v-else>
-          <GoogleSignInButton />
-          <EmailAuthForm />
+          <AuthMenu />
         </template>
       </div>
     </nav>

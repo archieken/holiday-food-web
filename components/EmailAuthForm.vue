@@ -1,17 +1,13 @@
 <script setup lang="ts">
 const { loginWithEmail, registerWithEmail, authError } = useAuth()
 
-const open = ref(false)
+const emit = defineEmits<{ success: [] }>()
+
 const mode = ref<'login' | 'register'>('login')
 const email = ref('')
 const password = ref('')
 const name = ref('')
 const submitting = ref(false)
-
-function toggleOpen() {
-  open.value = !open.value
-  authError.value = ''
-}
 
 async function submit() {
   submitting.value = true
@@ -23,10 +19,10 @@ async function submit() {
     } else {
       await registerWithEmail(email.value.trim(), password.value, name.value.trim())
     }
-    open.value = false
     email.value = ''
     password.value = ''
     name.value = ''
+    emit('success')
   } catch (error: any) {
     authError.value = error.data?.message ?? error.statusMessage ?? 'Something went wrong signing in.'
   } finally {
@@ -36,66 +32,31 @@ async function submit() {
 </script>
 
 <template>
-  <div class="email-auth">
-    <button type="button" class="email-toggle" @click="toggleOpen">
-      {{ open ? 'Cancel' : 'Sign in with email' }}
+  <form class="email-auth-form" @submit.prevent="submit">
+    <div class="mode-switch">
+      <button type="button" :class="{ active: mode === 'login' }" @click="mode = 'login'">Sign in</button>
+      <button type="button" :class="{ active: mode === 'register' }" @click="mode = 'register'">Create account</button>
+    </div>
+
+    <input v-if="mode === 'register'" v-model="name" type="text" placeholder="Name" required autocomplete="name">
+    <input v-model="email" type="email" placeholder="Email" required autocomplete="email">
+    <input
+      v-model="password" type="password" placeholder="Password" minlength="8" required
+      :autocomplete="mode === 'register' ? 'new-password' : 'current-password'"
+    >
+
+    <button type="submit" class="submit-button" :disabled="submitting">
+      {{ submitting ? 'Please wait…' : (mode === 'login' ? 'Sign in' : 'Create account') }}
     </button>
-
-    <form v-if="open" class="email-panel" @submit.prevent="submit">
-      <div class="mode-switch">
-        <button type="button" :class="{ active: mode === 'login' }" @click="mode = 'login'">Sign in</button>
-        <button type="button" :class="{ active: mode === 'register' }" @click="mode = 'register'">Create account</button>
-      </div>
-
-      <input v-if="mode === 'register'" v-model="name" type="text" placeholder="Name" required autocomplete="name">
-      <input v-model="email" type="email" placeholder="Email" required autocomplete="email">
-      <input
-        v-model="password" type="password" placeholder="Password" minlength="8" required
-        :autocomplete="mode === 'register' ? 'new-password' : 'current-password'"
-      >
-
-      <button type="submit" class="submit-button" :disabled="submitting">
-        {{ submitting ? 'Please wait…' : (mode === 'login' ? 'Sign in' : 'Create account') }}
-      </button>
-    </form>
-  </div>
+  </form>
 </template>
 
 <style scoped>
-.email-auth {
-  position: relative;
-}
-
-.email-toggle {
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 6px 12px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--ink);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.email-toggle:hover {
-  background: var(--bg);
-}
-
-.email-panel {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  z-index: 10;
+.email-auth-form {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  width: 220px;
-  padding: 14px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  width: 100%;
 }
 
 .mode-switch {
@@ -122,7 +83,7 @@ async function submit() {
   color: white;
 }
 
-.email-panel input {
+.email-auth-form input {
   padding: 7px 9px;
   border: 1px solid var(--border);
   border-radius: 6px;
