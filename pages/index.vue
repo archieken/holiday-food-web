@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { MealSlot, Recipe } from '~~/shared/types/itinerary'
-import { capitalize, COUNTRY, type MealEntry, mealEntries, placeLabel, recipeForSlot, slotKey, targetSlotsFor } from '~~/composables/useItineraryPlanner'
+import { capitalize, COUNTRY, type MealEntry, mealEntries, placeLabel, recipeForSlot, slotKey, targetSlotsFor, weekdayFor } from '~~/composables/useItineraryPlanner'
 
 useHead({ title: 'Tavira Recipe Maker' })
 
@@ -20,11 +20,13 @@ const {
   errorMessage,
   refreshingSlot,
   addingRecipeId,
+  filling,
   initialize,
   setName,
   setStartDate,
   setEndDate,
   setPartySize,
+  fillItinerary,
   openShoppingList,
   refreshRecipe,
   removeRecipe,
@@ -189,6 +191,11 @@ function stepServings(dayNumber: number, entry: MealEntry, direction: 1 | -1) {
         </div>
 
         <div class="field">
+          <label for="trip-length">Days</label>
+          <input id="trip-length" :value="tripLength" type="text" readonly disabled>
+        </div>
+
+        <div class="field">
           <label for="servings">People</label>
           <select
             id="servings" :value="tripServings" required
@@ -200,7 +207,7 @@ function stepServings(dayNumber: number, entry: MealEntry, direction: 1 | -1) {
           </select>
         </div>
       </div>
-      <p class="servings-trip-hint">{{ tripLength }}-day trip - changing the party size rescales any meals you've already added.</p>
+      <p class="servings-trip-hint">Changing the party size rescales any meals you've already added.</p>
       <p v-if="saving" class="saving-hint">Saving…</p>
     </form>
 
@@ -209,15 +216,20 @@ function stepServings(dayNumber: number, entry: MealEntry, direction: 1 | -1) {
     <section v-if="itinerary" class="results">
       <div class="results-header">
         <h2>{{ name }}</h2>
-        <button type="button" class="pdf-button" :disabled="shoppingListLoading" @click="openShoppingList">
-          {{ shoppingListLoading ? 'Preparing…' : 'Open shopping list' }}
-        </button>
+        <div class="results-actions">
+          <button type="button" class="fill-button" :disabled="filling" @click="fillItinerary">
+            {{ filling ? 'Filling…' : 'Fill itinerary' }}
+          </button>
+          <button type="button" class="pdf-button" :disabled="shoppingListLoading" @click="openShoppingList">
+            {{ shoppingListLoading ? 'Preparing…' : 'Open shopping list' }}
+          </button>
+        </div>
       </div>
 
       <div class="days">
         <article v-for="day in itinerary.itinerary" :key="day.day" class="day-band">
           <div class="day-banner">
-            <h3>Day {{ day.day }}</h3>
+            <h3>Day {{ day.day }} <span class="day-weekday">{{ weekdayFor(startDate, day.day) }}</span></h3>
           </div>
 
           <p v-if="mealEntries(day).length === 0" class="meal-context day-empty">No meals selected for this day.</p>
@@ -455,6 +467,14 @@ function stepServings(dayNumber: number, entry: MealEntry, direction: 1 | -1) {
   min-width: 90px;
 }
 
+.field input:disabled {
+  min-width: 60px;
+  width: 60px;
+  background: var(--bg);
+  color: var(--muted);
+  cursor: default;
+}
+
 .error {
   color: var(--danger);
   font-weight: 600;
@@ -477,6 +497,29 @@ function stepServings(dayNumber: number, entry: MealEntry, direction: 1 | -1) {
 .results-header h2 {
   color: var(--portugal-red);
   margin: 0;
+}
+
+.results-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.fill-button {
+  background: var(--azulejo-blue);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 1rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.fill-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .pdf-button {
@@ -519,6 +562,12 @@ function stepServings(dayNumber: number, entry: MealEntry, direction: 1 | -1) {
 .day-banner h3 {
   margin: 0;
   font-size: 1.05rem;
+}
+
+.day-weekday {
+  font-weight: 400;
+  opacity: 0.85;
+  font-size: 0.9rem;
 }
 
 .day-empty {

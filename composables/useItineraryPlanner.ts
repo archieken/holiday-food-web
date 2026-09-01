@@ -120,6 +120,11 @@ export function generatedName(startIso: string, endIso: string): string {
   return `Tavira ${formatDisplayDate(startIso)} - ${formatDisplayDate(endIso)}`
 }
 
+/** The weekday name (e.g. "Tuesday") for a trip's Nth day, given its start date. */
+export function weekdayFor(startIso: string, dayNumber: number): string {
+  return parseIso(addDaysIso(startIso, dayNumber - 1)).toLocaleDateString('en-GB', { weekday: 'long', timeZone: 'UTC' })
+}
+
 /**
  * Shared itinerary-planning state, lifted out of any single page via useState() so the home
  * page and the Explore Recipes page read/write the same trip. The trip itself is persisted on
@@ -145,6 +150,7 @@ export function useItineraryPlanner() {
   const errorMessage = useState('planner-error', () => '')
   const refreshingSlot = useState<string | null>('planner-refreshing-slot', () => null)
   const addingRecipeId = useState<string | null>('planner-adding-recipe-id', () => null)
+  const filling = useState('planner-filling', () => false)
 
   let autosaveTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -293,6 +299,34 @@ export function useItineraryPlanner() {
     name.value = value
     nameEditedManually.value = true
     persistDebounced()
+  }
+
+  /**
+   * Fills in every empty meal (Breakfast, Lunch, Dinner, Dessert) across the whole trip at the
+   * trip-wide servings count, leaving any meal that's already selected untouched.
+   */
+  async function fillItinerary() {
+    filling.value = true
+    errorMessage.value = ''
+
+    for (const selection of daySelections.value) {
+      if (selection.breakfast === null) selection.breakfast = tripServings.value
+      if (selection.lunch === null) selection.lunch = tripServings.value
+      if (selection.dinner === null) selection.dinner = tripServings.value
+      if (selection.dessert === null) selection.dessert = tripServings.value
+    }
+
+    try {
+      itinerary.value = await $fetch<ItineraryResponse>('/api/itinerary', {
+        method: 'POST',
+        body: { country: COUNTRY, days: daySelections.value, extraRecipes: extraRecipes.value }
+      })
+      persistDebounced()
+    } catch (error: any) {
+      errorMessage.value = error.data?.message ?? error.statusMessage ?? 'Something went wrong filling the itinerary.'
+    } finally {
+      filling.value = false
+    }
   }
 
   /** Saves the current shopping list under its own id and navigates to its shareable page. */
@@ -515,11 +549,13 @@ export function useItineraryPlanner() {
     errorMessage,
     refreshingSlot,
     addingRecipeId,
+    filling,
     initialize,
     setName,
     setStartDate,
     setEndDate,
     setPartySize,
+    fillItinerary,
     openShoppingList,
     refreshRecipe,
     removeRecipe,

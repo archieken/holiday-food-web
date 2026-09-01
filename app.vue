@@ -11,7 +11,7 @@ onMounted(async () => {
   <div>
     <nav class="top-nav">
       <div class="nav-links">
-        <NuxtLink to="/" class="nav-link">Plan Trip</NuxtLink>
+        <NuxtLink to="/" class="nav-link">Meal Plan</NuxtLink>
         <NuxtLink to="/recipes" class="nav-link">Explore Recipes</NuxtLink>
         <NuxtLink to="/import-recipe" class="nav-link">Import Recipe</NuxtLink>
       </div>
