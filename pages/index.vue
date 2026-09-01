@@ -268,7 +268,7 @@ function stepServings(dayNumber: number, entry: MealEntry, direction: 1 | -1) {
       </div>
 
       <div class="extras">
-        <h3>Extras <span class="extras-hint">&middot; unscheduled</span></h3>
+        <h3>Extras <span class="extras-hint">&middot; unassigned</span></h3>
 
         <div class="extra-search">
           <input
@@ -309,6 +309,7 @@ function stepServings(dayNumber: number, entry: MealEntry, direction: 1 | -1) {
                 </select>
                 <button
                   type="button" class="pill-confirm"
+                  :class="{ 'pill-confirm--warn': willSwap(recipe) }"
                   :disabled="addingRecipeId === recipe.id"
                   :aria-label="`${willSwap(recipe) ? 'Switch with' : 'Add to'} Day ${dayForExtra(recipe)}`"
                   :title="willSwap(recipe) ? 'Switch' : 'Add'"
@@ -828,6 +829,10 @@ button[type='submit']:disabled {
   font-size: 0.85rem;
   line-height: 1;
   cursor: pointer;
+}
+
+.pill-confirm--warn {
+  background: var(--danger);
 }
 
 .pill-confirm:disabled {
