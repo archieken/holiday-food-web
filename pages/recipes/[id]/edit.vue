@@ -120,7 +120,7 @@ async function saveChanges() {
 }
 
 .error {
-  color: var(--portugal-red);
+  color: var(--danger);
   font-weight: 600;
 }
 

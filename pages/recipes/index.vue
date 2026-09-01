@@ -282,7 +282,7 @@ async function printRecipe(recipe: Recipe) {
 }
 
 .error {
-  color: var(--portugal-red);
+  color: var(--danger);
   font-weight: 600;
 }
 
@@ -376,8 +376,8 @@ async function printRecipe(recipe: Recipe) {
 }
 
 .like-button.liked {
-  color: var(--portugal-red);
-  border-color: var(--portugal-red);
+  color: var(--danger);
+  border-color: var(--danger);
 }
 
 .like-button:hover:not(:disabled) {

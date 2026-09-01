@@ -184,7 +184,7 @@ onUnmounted(() => {
 }
 
 .error {
-  color: var(--portugal-red);
+  color: var(--danger);
   font-weight: 600;
   text-align: center;
 }

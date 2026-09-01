@@ -248,19 +248,19 @@ async function dataUrlToFile(dataUrl: string): Promise<File> {
 }
 
 .error {
-  color: var(--portugal-red);
+  color: var(--danger);
   font-weight: 600;
   margin-top: 16px;
 }
 
 .success {
-  color: var(--portugal-green);
+  color: var(--success);
   font-weight: 600;
   margin-top: 16px;
 }
 
 .success a {
-  color: var(--portugal-green);
+  color: var(--success);
 }
 
 .draft {

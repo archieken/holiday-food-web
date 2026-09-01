@@ -311,7 +311,7 @@ function formatDate(iso: string): string {
 }
 
 .error {
-  color: var(--portugal-red);
+  color: var(--danger);
   font-weight: 600;
 }
 
@@ -362,8 +362,8 @@ function formatDate(iso: string): string {
 }
 
 .like-button.liked {
-  color: var(--portugal-red);
-  border-color: var(--portugal-red);
+  color: var(--danger);
+  border-color: var(--danger);
 }
 
 .like-button:hover:not(:disabled) {
@@ -447,7 +447,7 @@ function formatDate(iso: string): string {
 .delete-button {
   background: none;
   border: 1px solid var(--border);
-  color: var(--portugal-red);
+  color: var(--danger);
 }
 
 .delete-button:hover:not(:disabled) {
@@ -586,7 +586,7 @@ function formatDate(iso: string): string {
   border-radius: 6px;
   padding: 2px 8px;
   font-size: 0.72rem;
-  color: var(--portugal-red);
+  color: var(--danger);
   cursor: pointer;
 }
 

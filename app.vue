@@ -36,14 +36,19 @@ onMounted(async () => {
 </template>
 
 <style>
-/* Built around the azulejo tile blue rather than the flag's red/green, so the accent
-   colors used everywhere (headings, buttons, links) sit comfortably next to the tile
-   banner instead of competing with it: a warm terracotta (rooftops, cork, azulejo
-   border details) for primary actions, and a teal-leaning green - adjacent to the blue
-   rather than a straight complementary clash - for secondary ones. */
+/* One theme: blue and white. --portugal-red/--portugal-green keep their original names
+   (touching every file that references them wasn't worth it) but now both resolve to
+   shades of the azulejo tile blue - a primary and a secondary tone - instead of the
+   red/green pair they used to hold, so headings, buttons, nav and banners all read as
+   one consistent palette instead of competing accent colors. --danger and --success are
+   the only non-blue colors left, reserved for the handful of places that need to mean
+   something specific (errors, destructive actions, liked hearts, success confirmations)
+   rather than just being decorative. */
 :root {
-  --portugal-red: #b8502a;
-  --portugal-green: #2f7d6e;
+  --portugal-red: #1b5e82;
+  --portugal-green: #2f7fa4;
+  --danger: #b8502a;
+  --success: #2f7d6e;
   --ink: #1f2328;
   --muted: #5b6570;
   --border: #e2e5e8;
@@ -61,7 +66,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 .top-nav {
@@ -156,7 +161,7 @@ body {
 
 .auth-error {
   text-align: center;
-  color: var(--portugal-red);
+  color: var(--danger);
   font-size: 0.85rem;
   margin: 8px 0 0;
 }

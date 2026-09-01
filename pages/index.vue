@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { MealSlot, Recipe } from '~~/shared/types/itinerary'
-import { capitalize, COUNTRY, mealEntries, placeLabel, slotKey, targetSlotsFor } from '~~/composables/useItineraryPlanner'
+import { capitalize, COUNTRY, type MealEntry, mealEntries, placeLabel, slotKey, targetSlotsFor } from '~~/composables/useItineraryPlanner'
 
 useHead({ title: 'Tavira Recipe Maker' })
 
@@ -75,6 +75,61 @@ function slotForExtra(recipe: Recipe): MealSlot | null {
 function setSlotForExtra(recipe: Recipe, slot: MealSlot) {
   extraRecipeSlot.value[recipe.id] = slot
 }
+
+const PLACEHOLDER_IMAGE = '/images/recipe-placeholder.svg'
+
+// The itinerary is only ever populated client-side (in response to a button click), so
+// unlike the recipe browsing pages there's no SSR/hydration race to guard against here -
+// it's safe to point straight at the real photo and only fall back once it 404s.
+const mealImageSrcs = ref<Record<string, string>>({})
+
+function mealImageSrcFor(recipeId: string): string {
+  return mealImageSrcs.value[recipeId] ?? `/api/recipes/${recipeId}/image`
+}
+
+function onMealImageError(recipeId: string) {
+  mealImageSrcs.value[recipeId] = PLACEHOLDER_IMAGE
+}
+
+/** Every (day, slot) a recipe id currently fills, keyed by recipe id - used to flag when
+ * the same dish has been planned more than once across the trip. */
+const recipeOccurrences = computed(() => {
+  const map: Record<string, { day: number, label: string }[]> = {}
+  if (!itinerary.value) return map
+
+  for (const day of itinerary.value.itinerary) {
+    for (const entry of mealEntries(day)) {
+      const occurrences = map[entry.recipe.id] ?? (map[entry.recipe.id] = [])
+      occurrences.push({ day: day.day, label: entry.label })
+    }
+  }
+  return map
+})
+
+/** A human-readable "also planned for Day X, <meal>" note, or null if this meal's recipe is unique to the trip. */
+function duplicateNote(day: number, entry: MealEntry): string | null {
+  const others = (recipeOccurrences.value[entry.recipe.id] ?? [])
+    .filter((occurrence) => !(occurrence.day === day && occurrence.label === entry.label))
+  if (others.length === 0) return null
+  return others.map((occurrence) => `Day ${occurrence.day} ${occurrence.label.toLowerCase()}`).join(', ')
+}
+
+const openIngredients = ref<Record<string, boolean>>({})
+
+function toggleIngredients(key: string) {
+  openIngredients.value[key] = !openIngredients.value[key]
+}
+
+const SERVINGS_OPTIONS = [2, 4, 6]
+
+function stepServings(dayNumber: number, entry: MealEntry, direction: 1 | -1) {
+  const currentIndex = SERVINGS_OPTIONS.indexOf(entry.recipe.servings)
+  const nextIndex = Math.min(Math.max((currentIndex === -1 ? 0 : currentIndex) + direction, 0), SERVINGS_OPTIONS.length - 1)
+  const nextServings = SERVINGS_OPTIONS[nextIndex]
+  if (nextServings !== entry.recipe.servings) {
+    changeServings(dayNumber, entry, nextServings)
+  }
+}
 </script>
 
 <template>
@@ -120,53 +175,83 @@ function setSlotForExtra(recipe: Recipe, slot: MealSlot) {
       </div>
 
       <div class="days">
-        <article v-for="day in itinerary.itinerary" :key="day.day" class="day-card">
-          <h3>Day {{ day.day }}</h3>
+        <article v-for="day in itinerary.itinerary" :key="day.day" class="day-band">
+          <div class="day-banner">
+            <h3>Day {{ day.day }}</h3>
+          </div>
 
-          <p v-if="mealEntries(day).length === 0" class="meal-context">No meals selected for this day.</p>
+          <p v-if="mealEntries(day).length === 0" class="meal-context day-empty">No meals selected for this day.</p>
 
-          <div v-for="entry in mealEntries(day)" :key="entry.label" class="meal">
-            <div class="meal-heading-row">
-              <h4>{{ entry.label }}: {{ entry.recipe.name }}</h4>
-              <div class="meal-actions">
+          <div v-for="entry in mealEntries(day)" :key="entry.label" class="meal-strip">
+            <div class="meal-photo">
+              <img
+                :src="mealImageSrcFor(entry.recipe.id)"
+                :alt="entry.recipe.name"
+                @error="onMealImageError(entry.recipe.id)"
+              >
+            </div>
+
+            <div class="meal-main">
+              <span class="meal-slot">{{ entry.label }}</span>
+              <NuxtLink :to="`/recipes/${entry.recipe.id}`" class="meal-name">{{ entry.recipe.name }}</NuxtLink>
+              <p class="meal-meta">
+                <template v-if="placeLabel(entry.recipe)">{{ placeLabel(entry.recipe) }} &middot; </template>
+                <template v-if="entry.recipe.difficulty">{{ capitalize(entry.recipe.difficulty) }} &middot; </template>
+                Prep {{ entry.recipe.prepTime }}m / Cook {{ entry.recipe.cookTime }}m
+              </p>
+              <p v-if="duplicateNote(day.day, entry)" class="dup-note">&#8635; Also planned for {{ duplicateNote(day.day, entry) }}</p>
+              <p v-if="entry.recipe.localContext" class="meal-blurb">{{ entry.recipe.localContext }}</p>
+              <button type="button" class="ing-toggle" @click="toggleIngredients(slotKey(day.day, entry.slot))">
+                {{ openIngredients[slotKey(day.day, entry.slot)] ? '▾ Hide' : '▸ View' }} ingredients ({{ entry.recipe.ingredients.length }})
+              </button>
+              <ul v-if="openIngredients[slotKey(day.day, entry.slot)]" class="ing-list">
+                <li v-for="ingredient in entry.recipe.ingredients" :key="ingredient.name">
+                  {{ ingredient.quantity }} {{ ingredient.unit }} {{ ingredient.name }}
+                </li>
+              </ul>
+            </div>
+
+            <div class="meal-side">
+              <div class="stepper">
                 <button
-                  type="button" class="refresh-button"
+                  type="button"
+                  :disabled="refreshingSlot === slotKey(day.day, entry.slot) || entry.recipe.servings <= SERVINGS_OPTIONS[0]"
+                  @click="stepServings(day.day, entry, -1)"
+                >
+                  &minus;
+                </button>
+                <span class="stepper-val">Serves {{ entry.recipe.servings }}</span>
+                <button
+                  type="button"
+                  :disabled="refreshingSlot === slotKey(day.day, entry.slot) || entry.recipe.servings >= SERVINGS_OPTIONS[SERVINGS_OPTIONS.length - 1]"
+                  @click="stepServings(day.day, entry, 1)"
+                >
+                  +
+                </button>
+              </div>
+
+              <div class="icon-actions">
+                <button
+                  type="button" class="icon-btn"
+                  :class="{ spinning: refreshingSlot === slotKey(day.day, entry.slot) }"
                   :disabled="refreshingSlot === slotKey(day.day, entry.slot)"
+                  :aria-label="refreshingSlot === slotKey(day.day, entry.slot) ? 'Refreshing…' : 'Try another recipe'"
+                  :title="refreshingSlot === slotKey(day.day, entry.slot) ? 'Refreshing…' : 'Try another'"
                   @click="refreshRecipe(day.day, entry)"
                 >
-                  {{ refreshingSlot === slotKey(day.day, entry.slot) ? 'Refreshing…' : 'Try another' }}
+                  &#8635;
                 </button>
                 <button
-                  type="button" class="remove-button"
+                  type="button" class="icon-btn danger"
                   :disabled="refreshingSlot === slotKey(day.day, entry.slot)"
+                  aria-label="Remove meal"
+                  title="Remove"
                   @click="removeRecipe(day.day, entry)"
                 >
-                  Remove
+                  &#10005;
                 </button>
               </div>
             </div>
-            <p class="meal-meta">
-              <template v-if="placeLabel(entry.recipe)">{{ placeLabel(entry.recipe) }} &middot; </template>
-              <template v-if="entry.recipe.difficulty">{{ capitalize(entry.recipe.difficulty) }} &middot; </template>
-              Prep {{ entry.recipe.prepTime }}m / Cook {{ entry.recipe.cookTime }}m &middot;
-              Serves
-              <select
-                class="meal-servings-select"
-                :value="entry.recipe.servings"
-                :disabled="refreshingSlot === slotKey(day.day, entry.slot)"
-                @change="changeServings(day.day, entry, Number(($event.target as HTMLSelectElement).value))"
-              >
-                <option :value="2">2</option>
-                <option :value="4">4</option>
-                <option :value="6">6</option>
-              </select>
-            </p>
-            <p v-if="entry.recipe.localContext" class="meal-context">{{ entry.recipe.localContext }}</p>
-            <ul>
-              <li v-for="ingredient in entry.recipe.ingredients" :key="ingredient.name">
-                {{ ingredient.quantity }} {{ ingredient.unit }} {{ ingredient.name }}
-              </li>
-            </ul>
           </div>
         </article>
       </div>
@@ -325,7 +410,7 @@ button[type='submit']:disabled {
 }
 
 .error {
-  color: var(--portugal-red);
+  color: var(--danger);
   font-weight: 600;
   margin-top: 16px;
 }
@@ -367,126 +452,234 @@ button[type='submit']:disabled {
 }
 
 .days {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: 16px;
 }
 
-.day-card {
+.day-band {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
+  overflow: hidden;
+}
+
+.day-banner {
+  background: linear-gradient(120deg, var(--azulejo-blue), #24799e);
+  color: white;
+  padding: 10px 16px;
+}
+
+.day-banner h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.day-empty {
   padding: 16px;
 }
 
-.day-card h3 {
-  color: var(--portugal-red);
-  margin: 0 0 12px;
-}
-
-.meal {
-  margin-bottom: 12px;
-}
-
-.meal:last-child {
-  margin-bottom: 0;
-}
-
-.meal h4 {
-  color: var(--portugal-green);
-  font-size: 0.95rem;
-  margin: 0;
-}
-
-.meal-heading-row {
+.meal-strip {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  margin: 0 0 4px;
+  gap: 16px;
+  padding: 16px;
 }
 
-.meal-actions {
-  display: flex;
-  flex-shrink: 0;
-  gap: 6px;
+.meal-strip + .meal-strip {
+  border-top: 1px solid var(--border);
 }
 
-.remove-button {
-  flex-shrink: 0;
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 2px 8px;
+.meal-photo {
+  flex: 0 0 96px;
+  width: 96px;
+  height: 96px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--azulejo-bg);
+}
+
+.meal-photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.meal-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.meal-slot {
+  display: block;
   font-size: 0.7rem;
-  color: var(--portugal-red);
-  cursor: pointer;
-}
-
-.remove-button:hover:not(:disabled) {
-  background: var(--bg);
-}
-
-.remove-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.refresh-button {
-  flex-shrink: 0;
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 2px 8px;
-  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   color: var(--portugal-green);
-  cursor: pointer;
+  font-weight: 700;
 }
 
-.refresh-button:hover:not(:disabled) {
-  background: var(--bg);
+.meal-name {
+  display: block;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--ink);
+  text-decoration: none;
+  margin: 2px 0 1px;
 }
 
-.refresh-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.meal-name:hover {
+  color: var(--portugal-red);
 }
 
 .meal-meta {
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   color: var(--muted);
-  margin: 0 0 4px;
+  margin: 0;
 }
 
-.meal-servings-select {
-  padding: 1px 4px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  font-size: 0.78rem;
-  color: var(--muted);
-  background: var(--surface);
+.dup-note {
+  font-size: 0.75rem;
+  color: var(--portugal-red);
+  font-weight: 600;
+  margin: 4px 0 0;
 }
 
-.meal-servings-select:disabled {
-  opacity: 0.6;
+.meal-blurb {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-style: italic;
+  margin: 6px 0 0;
+  line-height: 1.4;
+}
+
+.ing-toggle {
+  display: block;
+  margin: 8px 0 0;
+  padding: 0;
+  background: none;
+  border: none;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--azulejo-blue);
+  cursor: pointer;
+}
+
+.ing-list {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  background: var(--bg);
+  border-radius: 6px;
+  list-style-position: inside;
+  color: var(--ink);
+}
+
+.ing-list li {
+  font-size: 0.85rem;
+  margin-bottom: 2px;
 }
 
 .meal-context {
   font-size: 0.82rem;
   font-style: italic;
   color: var(--muted);
-  margin: 0 0 8px;
-}
-
-.meal ul {
   margin: 0;
-  padding-left: 18px;
-  color: var(--ink);
 }
 
-.meal li {
-  font-size: 0.9rem;
-  margin-bottom: 2px;
+.meal-side {
+  flex: 0 0 150px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.stepper button {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: var(--bg);
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.stepper button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.stepper-val {
+  padding: 0 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.icon-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.icon-btn {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--azulejo-blue);
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.icon-btn:hover:not(:disabled) {
+  background: var(--bg);
+}
+
+.icon-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.icon-btn.spinning {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.icon-btn.danger {
+  color: var(--danger);
+}
+
+@media (max-width: 560px) {
+  .meal-strip {
+    flex-wrap: wrap;
+  }
+
+  .meal-side {
+    flex: 1 1 100%;
+    align-items: flex-start;
+  }
+
+  .icon-actions {
+    justify-content: flex-start;
+    align-items: flex-start;
+  }
 }
 
 .extras {
