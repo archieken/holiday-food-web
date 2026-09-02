@@ -165,6 +165,40 @@ async function deleteComment(comment: Comment) {
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 }
+
+const showAuthorForm = ref(false)
+const newAuthorEmail = ref('')
+const newAuthorName = ref('')
+const changingAuthor = ref(false)
+
+function openAuthorForm() {
+  if (!recipe.value) return
+  newAuthorEmail.value = recipe.value.createdByEmail ?? ''
+  newAuthorName.value = recipe.value.createdByName ?? ''
+  showAuthorForm.value = true
+}
+
+async function saveAuthor() {
+  if (!recipe.value) return
+
+  changingAuthor.value = true
+  errorMessage.value = ''
+
+  try {
+    const updated = await $fetch<Recipe>(`/api/recipes/${recipe.value.id}/author`, {
+      method: 'PATCH',
+      body: { email: newAuthorEmail.value.trim() || null, name: newAuthorName.value.trim() || null },
+      headers: authHeaders()
+    })
+    recipe.value.createdByEmail = updated.createdByEmail
+    recipe.value.createdByName = updated.createdByName
+    showAuthorForm.value = false
+  } catch (error: any) {
+    errorMessage.value = error.data?.message ?? error.statusMessage ?? 'Something went wrong changing the author.'
+  } finally {
+    changingAuthor.value = false
+  }
+}
 </script>
 
 <template>
@@ -228,6 +262,13 @@ function formatDate(iso: string): string {
           </NuxtLink>
           <button
             v-if="user?.admin"
+            type="button" class="author-button"
+            @click="showAuthorForm ? (showAuthorForm = false) : openAuthorForm()"
+          >
+            {{ showAuthorForm ? 'Cancel' : 'Change author' }}
+          </button>
+          <button
+            v-if="user?.admin"
             type="button" class="delete-button"
             :disabled="deleting"
             @click="deleteRecipe"
@@ -235,6 +276,18 @@ function formatDate(iso: string): string {
             {{ deleting ? 'Deleting…' : 'Delete recipe' }}
           </button>
         </div>
+
+        <form v-if="showAuthorForm" class="author-form" @submit.prevent="saveAuthor">
+          <label>
+            <span>New author's email</span>
+            <input v-model="newAuthorEmail" type="email" placeholder="Leave blank to clear authorship">
+          </label>
+          <label>
+            <span>Display name <span class="optional">(optional)</span></span>
+            <input v-model="newAuthorName" type="text" placeholder="Shown as Uploaded by ...">
+          </label>
+          <button type="submit" :disabled="changingAuthor">{{ changingAuthor ? 'Saving…' : 'Save author' }}</button>
+        </form>
 
         <section class="recipe-body">
           <h2>Ingredients</h2>
@@ -459,7 +512,67 @@ function formatDate(iso: string): string {
   background: var(--bg);
 }
 
+.author-button {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--azulejo-blue);
+}
+
+.author-button:hover {
+  background: var(--bg);
+}
+
 .actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.author-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  margin-bottom: 20px;
+}
+
+.author-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 180px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.author-form .optional {
+  font-weight: 400;
+}
+
+.author-form input {
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.author-form button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  background: var(--azulejo-blue);
+  color: white;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.author-form button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
