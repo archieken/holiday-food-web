@@ -72,7 +72,8 @@ async function saveRecipe() {
     ...draft.value,
     region: draft.value.region?.trim() || null,
     location: draft.value.location?.trim() || null,
-    localContext: draft.value.localContext?.trim() || null
+    localContext: draft.value.localContext?.trim() || null,
+    chefsNotes: draft.value.chefsNotes?.trim() || null
   }
 
   try {

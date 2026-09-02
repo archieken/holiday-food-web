@@ -249,6 +249,11 @@ function formatDate(iso: string): string {
           <ol class="recipe-instructions">
             <li v-for="(step, index) in recipe.instructions" :key="index">{{ step }}</li>
           </ol>
+
+          <template v-if="recipe.chefsNotes">
+            <h2>Chef's Notes</h2>
+            <p class="recipe-chefs-notes">{{ recipe.chefsNotes }}</p>
+          </template>
         </section>
       </article>
 
@@ -485,6 +490,13 @@ function formatDate(iso: string): string {
 .ingredient-translation {
   color: var(--muted);
   font-style: italic;
+}
+
+.recipe-chefs-notes {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.92rem;
+  line-height: 1.5;
 }
 
 .comments {

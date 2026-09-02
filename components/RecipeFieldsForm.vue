@@ -104,6 +104,11 @@ function removeStep(index: number) {
     </div>
     <p v-if="model.instructions.length === 0" class="empty-hint">No steps yet.</p>
   </div>
+
+  <label class="field full">
+    <span>Chef's notes <span class="optional">(optional)</span></span>
+    <textarea v-model="model.chefsNotes" rows="2" placeholder="Substitutions, timing tricks, anything worth knowing before you cook it" />
+  </label>
 </template>
 
 <style scoped>

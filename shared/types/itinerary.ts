@@ -19,6 +19,8 @@ export interface Recipe {
   cookTime: number
   servings: number
   localContext: string | null
+  /** Optional practical tips from whoever's cooking it - substitutions, timing tricks, etc. */
+  chefsNotes: string | null
   ingredients: Ingredient[]
   instructions: string[]
   /** Null for the built-in catalogue; set for a recipe someone imported/created. */
