@@ -73,12 +73,18 @@ export interface ExtraRecipeSelection {
 }
 
 /** What a single day of the trip should include: how many people to cook each
- * meal for, or null to skip it. */
+ * meal for, or null to skip it. A meal that was explicitly placed (rather than left to the
+ * deterministic default pick) also carries the exact recipe id it was pinned to, so a later
+ * autosave or reload doesn't silently swap it for a different recipe. */
 export interface MealSelection {
   breakfast: number | null
   lunch: number | null
   dinner: number | null
   dessert: number | null
+  breakfastRecipeId?: string | null
+  lunchRecipeId?: string | null
+  dinnerRecipeId?: string | null
+  dessertRecipeId?: string | null
 }
 
 export interface ItineraryRequest {

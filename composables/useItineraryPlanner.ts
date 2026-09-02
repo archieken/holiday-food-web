@@ -24,7 +24,10 @@ export interface MealEntry {
 }
 
 function emptySelection(): MealSelection {
-  return { breakfast: null, lunch: null, dinner: null, dessert: null }
+  return {
+    breakfast: null, lunch: null, dinner: null, dessert: null,
+    breakfastRecipeId: null, lunchRecipeId: null, dinnerRecipeId: null, dessertRecipeId: null
+  }
 }
 
 /** Converts a number input's raw string value to a servings count, or null if it's empty/invalid. */
@@ -258,8 +261,27 @@ export function useItineraryPlanner() {
     if (expected > current.length) {
       for (let i = current.length; i < expected; i++) current.push(emptySelection())
     } else if (expected < current.length) {
-      current.length = expected
+      moveTrailingDaysToExtras(expected)
     }
+  }
+
+  /**
+   * Drops the trip to `keepCount` days, moving any recipe that was on a day beyond that into
+   * Extras first (in day, then meal, order) rather than losing it - see {@link mealEntries} for
+   * the Breakfast/Lunch/Dinner/Dessert ordering.
+   */
+  function moveTrailingDaysToExtras(keepCount: number) {
+    const removedDays = (itinerary.value?.itinerary ?? []).filter((day) => day.day > keepCount)
+    const moved: ExtraRecipeSelection[] = []
+
+    for (const day of removedDays) {
+      for (const entry of mealEntries(day)) {
+        moved.push({ recipeId: entry.recipe.id, servings: entry.recipe.servings })
+      }
+    }
+
+    if (moved.length > 0) extraRecipes.value = [...extraRecipes.value, ...moved]
+    daySelections.value.length = keepCount
   }
 
   function syncNameForDates() {
@@ -358,7 +380,7 @@ export function useItineraryPlanner() {
     errorMessage.value = ''
 
     try {
-      itinerary.value = await $fetch<ItineraryResponse>('/api/itinerary/refresh-recipe', {
+      const result = await $fetch<ItineraryResponse>('/api/itinerary/refresh-recipe', {
         method: 'POST',
         body: {
           country: COUNTRY,
@@ -369,6 +391,14 @@ export function useItineraryPlanner() {
           excludeRecipeId: entry.recipe.id
         }
       })
+      itinerary.value = result
+
+      // Pin the newly-picked recipe so a later autosave/reload doesn't revert to the default.
+      const selection = daySelections.value[dayNumber - 1]
+      const resolvedDay = result.itinerary.find((d) => d.day === dayNumber)
+      const newRecipe = resolvedDay ? recipeForSlot(resolvedDay, entry.slot) : null
+      if (selection && newRecipe) setSelectionRecipeId(selection, entry.slot, newRecipe.id)
+
       persistDebounced()
     } catch (error: any) {
       errorMessage.value = error.data?.message ?? error.statusMessage ?? 'Something went wrong refreshing that recipe.'
@@ -384,7 +414,10 @@ export function useItineraryPlanner() {
     errorMessage.value = ''
 
     const selection = daySelections.value[dayNumber - 1]
-    if (selection) setSelectionValue(selection, entry.slot, null)
+    if (selection) {
+      setSelectionValue(selection, entry.slot, null)
+      setSelectionRecipeId(selection, entry.slot, null)
+    }
 
     try {
       itinerary.value = await $fetch<ItineraryResponse>('/api/itinerary', {
@@ -436,17 +469,27 @@ export function useItineraryPlanner() {
     else selection.dessert = value
   }
 
+  /** Pins (or clears) which exact recipe a slot should keep resolving to. */
+  function setSelectionRecipeId(selection: MealSelection, slot: MealSlot, recipeId: string | null) {
+    if (slot === 'BREAKFAST') selection.breakfastRecipeId = recipeId
+    else if (slot === 'LUNCH') selection.lunchRecipeId = recipeId
+    else if (slot === 'DINNER') selection.dinnerRecipeId = recipeId
+    else selection.dessertRecipeId = recipeId
+  }
+
   /**
-   * Places an exact recipe into a specific (day, slot) meal, activating that
-   * slot with the trip-wide servings count first if it wasn't already selected.
+   * Places an exact recipe into a specific (day, slot) meal, activating that slot with the
+   * trip-wide servings count first if it wasn't already selected, and pinning it to this exact
+   * recipe so a later autosave or reload doesn't swap in a different one.
    */
   async function addRecipe(dayNumber: number, slot: MealSlot, recipe: Recipe) {
     addingRecipeId.value = recipe.id
     errorMessage.value = ''
 
     const selection = daySelections.value[dayNumber - 1]
-    if (selection && selectionValue(selection, slot) === null) {
-      setSelectionValue(selection, slot, tripServings.value)
+    if (selection) {
+      if (selectionValue(selection, slot) === null) setSelectionValue(selection, slot, tripServings.value)
+      setSelectionRecipeId(selection, slot, recipe.id)
     }
 
     try {
@@ -470,12 +513,38 @@ export function useItineraryPlanner() {
   }
 
   /**
-   * Adds a recipe to the trip without tying it to any day or meal - it's still
-   * scaled to the trip-wide servings count and folded into the shopping list. Used by the
-   * Explore Recipes page's "Add to Itinerary" button and by a recipe PDF's QR code.
+   * The earliest (day, slot) this recipe could fill without disturbing anything already
+   * there - Day 1 before Day 2, and within a day the slot order from {@link targetSlotsFor}
+   * (e.g. Lunch before Dinner for a Main). Null if the recipe has no day slot at all (a
+   * Starter) or every eligible slot across the trip is already taken.
+   */
+  function firstAvailableSlot(recipe: Recipe): { day: number, slot: MealSlot } | null {
+    const slots = targetSlotsFor(recipe)
+    if (slots.length === 0) return null
+
+    for (let day = 1; day <= daySelections.value.length; day++) {
+      const selection = daySelections.value[day - 1]
+      for (const slot of slots) {
+        if (selectionValue(selection, slot) === null) return { day, slot }
+      }
+    }
+    return null
+  }
+
+  /**
+   * Adds a recipe to the trip - straight into the earliest empty slot it's eligible for, or
+   * into Extras (unassigned) if no slot is free. Used by the Explore Recipes page's "Add to
+   * Itinerary" button and by a recipe PDF's QR code.
    */
   async function addExtraRecipe(recipe: Recipe) {
     await initialize()
+
+    const target = firstAvailableSlot(recipe)
+    if (target) {
+      await addRecipe(target.day, target.slot, recipe)
+      return
+    }
+
     addingRecipeId.value = recipe.id
     errorMessage.value = ''
 
