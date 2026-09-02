@@ -189,28 +189,35 @@ export function useItineraryPlanner() {
    */
   async function initialize() {
     await callOnce('itinerary-planner-init', async () => {
-      const today = todayIso()
-      const existing = await $fetch<SavedItineraryResponse | null>('/api/itineraries/lookup', { query: { date: today } })
+      try {
+        const today = todayIso()
+        const existing = await $fetch<SavedItineraryResponse | null>('/api/itineraries/lookup', { query: { date: today } })
 
-      if (existing) {
-        applyRecord(existing)
-        return
-      }
-
-      const start = today
-      const end = addDaysIso(start, 3)
-      const created = await $fetch<SavedItineraryResponse>('/api/itineraries', {
-        method: 'POST',
-        body: {
-          name: generatedName(start, end),
-          startDate: start,
-          endDate: end,
-          partySize: 2,
-          days: Array.from({ length: 3 }, emptySelection),
-          extraRecipes: []
+        if (existing) {
+          applyRecord(existing)
+          return
         }
-      })
-      applyRecord(created)
+
+        const start = today
+        const end = addDaysIso(start, 3)
+        const created = await $fetch<SavedItineraryResponse>('/api/itineraries', {
+          method: 'POST',
+          body: {
+            name: generatedName(start, end),
+            startDate: start,
+            endDate: end,
+            partySize: 2,
+            days: Array.from({ length: 3 }, emptySelection),
+            extraRecipes: []
+          }
+        })
+        applyRecord(created)
+      } catch (error: any) {
+        // Leave the page on its local (unsaved) defaults rather than crashing the whole render -
+        // itineraryId stays null, so every autosave call is a safe no-op until the user reloads
+        // (e.g. once a transient backend outage clears).
+        errorMessage.value = error.data?.message ?? error.statusMessage ?? 'Could not load your itinerary - is holiday-food-api reachable?'
+      }
     })
   }
 
